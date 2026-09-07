@@ -48,3 +48,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Bundle the ML Kit barcode model directly into the APK for instant, offline scanning
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+}
