@@ -81,6 +81,25 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
           MobileScanner(
             controller: _controller!,
             onDetect: _onDetect,
+            errorBuilder: (context, error, child) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline, color: AppColors.error, size: 48),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Scanner Error\n\n${error.errorDetails?.message ?? "Please ensure camera permissions are granted and Google Play Services is up to date."}',
+                        style: const TextStyle(color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
 
           // Scan overlay
