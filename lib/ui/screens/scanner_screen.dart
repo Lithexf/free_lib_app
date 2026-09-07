@@ -379,6 +379,18 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
   Future<void> _processIsbn(String isbn) async {
     if (_isProcessing) return;
 
+    // Check for duplicate scan
+    final existingBooks = ref.read(bookListProvider).valueOrNull ?? [];
+    if (existingBooks.any((b) => b.isbn == isbn)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You already scanned this book!'),
+          backgroundColor: AppColors.accent,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isProcessing = true);
 
     try {

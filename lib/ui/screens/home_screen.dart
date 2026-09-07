@@ -40,7 +40,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         index: _currentTab,
         children: [
           _buildLibraryTab(),
-          const ScannerScreen(),
+          _currentTab == 1 ? const ScannerScreen() : const SizedBox.shrink(),
           const StatsScreen(),
         ],
       ),
@@ -133,16 +133,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildAppBar() {
+    final bookCount = ref.watch(bookListProvider).valueOrNull?.length ?? 0;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       child: Row(
         children: [
           if (!_isSearching) ...[
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'FreeLib',
                     style: TextStyle(
                       color: AppColors.primary,
@@ -150,10 +152,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  SizedBox(height: 2),
+                  const SizedBox(height: 2),
                   Text(
-                    'Your personal library',
-                    style: TextStyle(
+                    'Your personal library • $bookCount books',
+                    style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 14,
                     ),
