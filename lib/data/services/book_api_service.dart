@@ -30,11 +30,9 @@ class BookApiService {
     final isbn = IsbnValidator.normalize(rawIsbn);
     if (isbn == null) return null;
 
-    // Try Google Books first (if API key configured)
-    if (_googleBooksApiKey != null) {
-      final googleResult = await _lookupGoogleBooks(isbn);
-      if (googleResult != null) return googleResult;
-    }
+    // Try Google Books first (works without API key for standard queries)
+    final googleResult = await _lookupGoogleBooks(isbn);
+    if (googleResult != null) return googleResult;
 
     // Fall back to Open Library
     final openLibResult = await _lookupOpenLibrary(isbn);

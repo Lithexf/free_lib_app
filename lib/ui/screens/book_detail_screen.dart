@@ -493,7 +493,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
     }
     text.writeln('Status: ${_selectedStatus.label}');
 
-    Share.share(text.toString());
+    SharePlus.instance.share(ShareParams(text: text.toString()));
   }
 
   void _confirmDelete() {
