@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import '../ui/theme/app_colors.dart';
 
 /// All possible reading statuses a book can have in the user's library.
 enum ReadingStatus {
-  planToRead('Plan to Read', Icons.bookmark_outline, AppColors.statusPlanToRead),
-  reading('Reading', Icons.auto_stories, AppColors.statusReading),
-  completed('Completed', Icons.check_circle_outline, AppColors.statusCompleted),
-  onHold('On Hold', Icons.pause_circle_outline, AppColors.statusOnHold),
-  dropped('Dropped', Icons.cancel_outlined, AppColors.statusDropped),
-  rereading('Re-reading', Icons.replay, AppColors.statusRereading);
+  planToRead('Plan to Read', Icons.bookmark_outline, Color(0xFF5B8DEF)),
+  reading('Reading', Icons.auto_stories, Color(0xFF00D9A6)),
+  completed('Completed', Icons.check_circle_outline, Color(0xFFE8A838)),
+  onHold('On Hold', Icons.pause_circle_outline, Color(0xFFFF9F43)),
+  dropped('Dropped', Icons.cancel_outlined, Color(0xFFFF6B6B)),
+  rereading('Re-reading', Icons.replay, Color(0xFFAB7AFF));
 
   const ReadingStatus(this.label, this.icon, this.color);
 

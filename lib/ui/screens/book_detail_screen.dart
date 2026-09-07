@@ -109,7 +109,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
               CachedNetworkImage(
                 imageUrl: _book.coverUrl!,
                 fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => Container(
+                errorWidget: (context, url, error) => Container(
                   color: AppColors.surfaceLight,
                 ),
               ),
@@ -154,7 +154,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                               imageUrl: _book.coverUrl!,
                               height: 200,
                               fit: BoxFit.cover,
-                              errorWidget: (_, __, ___) =>
+                              errorWidget: (context, url, error) =>
                                   _buildCoverPlaceholder(),
                             )
                           : _buildCoverPlaceholder(),
@@ -493,7 +493,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
     }
     text.writeln('Status: ${_selectedStatus.label}');
 
-    SharePlus.instance.share(ShareParams(text: text.toString()));
+    Share.share(text.toString());
   }
 
   void _confirmDelete() {
@@ -516,13 +516,14 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context); // Close dialog
+              final navigator = Navigator.of(context);
+              navigator.pop(); // Close dialog
               if (_book.id != null) {
                 await ref
                     .read(bookListProvider.notifier)
                     .deleteBook(_book.id!);
               }
-              if (mounted) Navigator.pop(context); // Close detail screen
+              if (mounted) navigator.pop(); // Close detail screen
             },
             child: const Text(
               'Delete',

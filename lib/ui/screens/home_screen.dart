@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../data/models/book.dart';
 import '../../data/models/reading_status.dart';
 import '../../providers/book_providers.dart';
 import '../../ui/theme/app_colors.dart';
@@ -384,7 +385,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  void _openBookDetail(book) async {
+  void _openBookDetail(Book book) async {
     await Navigator.push(
       context,
       MaterialPageRoute(
