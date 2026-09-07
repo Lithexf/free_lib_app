@@ -123,35 +123,70 @@ class StatsScreen extends ConsumerWidget {
   }
 
   Widget _buildQuickStats(BookStats stats) {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: _buildStatCard(
-            icon: Icons.library_books_rounded,
-            iconColor: AppColors.secondary,
-            label: 'Total Books',
-            value: '${stats.totalCount}',
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                icon: Icons.library_books_rounded,
+                iconColor: AppColors.secondary,
+                label: 'Total Books',
+                value: '${stats.totalCount}',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildStatCard(
+                icon: Icons.star_rounded,
+                iconColor: AppColors.primary,
+                label: 'Avg Rating',
+                value: stats.averageRating > 0
+                    ? stats.averageRating.toStringAsFixed(1)
+                    : '—',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildStatCard(
+                icon: ReadingStatus.completed.icon,
+                iconColor: ReadingStatus.completed.color,
+                label: 'Read',
+                value: '${stats.countByStatus['completed'] ?? 0}',
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildStatCard(
-            icon: Icons.star_rounded,
-            iconColor: AppColors.primary,
-            label: 'Avg Rating',
-            value: stats.averageRating > 0
-                ? stats.averageRating.toStringAsFixed(1)
-                : '—',
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildStatCard(
-            icon: Icons.check_circle_rounded,
-            iconColor: AppColors.accent,
-            label: 'Completed',
-            value: '${stats.countByStatus['completed'] ?? 0}',
-          ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                icon: ReadingStatus.reading.icon,
+                iconColor: ReadingStatus.reading.color,
+                label: 'Reading',
+                value: '${stats.countByStatus['reading'] ?? 0}',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildStatCard(
+                icon: ReadingStatus.planToRead.icon,
+                iconColor: ReadingStatus.planToRead.color,
+                label: 'Planned',
+                value: '${stats.countByStatus['planToRead'] ?? 0}',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildStatCard(
+                icon: ReadingStatus.dropped.icon,
+                iconColor: ReadingStatus.dropped.color,
+                label: 'Dropped',
+                value: '${stats.countByStatus['dropped'] ?? 0}',
+              ),
+            ),
+          ],
         ),
       ],
     );
