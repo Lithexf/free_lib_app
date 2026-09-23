@@ -274,8 +274,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildAppBar() {
-    final bookCount = ref.watch(bookListProvider).valueOrNull?.length ?? 0;
-
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       child: Row(
@@ -294,9 +292,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    'Your personal library • $bookCount books',
-                    style: const TextStyle(
+                  const Text(
+                    'Your personal library',
+                    style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 14,
                     ),

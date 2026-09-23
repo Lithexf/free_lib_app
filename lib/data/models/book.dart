@@ -21,6 +21,16 @@ class Book {
   final DateTime? dateFinished;
   final String? notes;
 
+  // ── Original (Japanese) metadata ──
+  /// The original Japanese title (stored for searching)
+  final String? originalTitle;
+
+  /// The romanized (Romaji) title (stored for searching and display)
+  final String? romajiTitle;
+
+  /// The original Japanese author (stored for searching)
+  final String? originalAuthor;
+
   // ── External (community) rating data ──
   /// Average rating from external source (Google Books / Open Library), 1.0–5.0 scale
   final double? externalRating;
@@ -49,6 +59,9 @@ class Book {
     this.dateStarted,
     this.dateFinished,
     this.notes,
+    this.originalTitle,
+    this.romajiTitle,
+    this.originalAuthor,
     this.externalRating,
     this.externalRatingCount,
     this.externalRatingSource,
@@ -78,6 +91,9 @@ class Book {
           ? DateTime.fromMillisecondsSinceEpoch(map['date_finished'] as int)
           : null,
       notes: map['notes'] as String?,
+      originalTitle: map['original_title'] as String?,
+      romajiTitle: map['romaji_title'] as String?,
+      originalAuthor: map['original_author'] as String?,
       externalRating: (map['external_rating'] as num?)?.toDouble(),
       externalRatingCount: map['external_rating_count'] as int?,
       externalRatingSource: map['external_rating_source'] as String?,
@@ -104,6 +120,9 @@ class Book {
       'date_started': dateStarted?.millisecondsSinceEpoch,
       'date_finished': dateFinished?.millisecondsSinceEpoch,
       'notes': notes,
+      'original_title': originalTitle,
+      'romaji_title': romajiTitle,
+      'original_author': originalAuthor,
       'external_rating': externalRating,
       'external_rating_count': externalRatingCount,
       'external_rating_source': externalRatingSource,
@@ -129,6 +148,9 @@ class Book {
     DateTime? dateStarted,
     DateTime? dateFinished,
     String? notes,
+    String? originalTitle,
+    String? romajiTitle,
+    String? originalAuthor,
     double? externalRating,
     int? externalRatingCount,
     String? externalRatingSource,
@@ -151,6 +173,9 @@ class Book {
       dateStarted: dateStarted ?? this.dateStarted,
       dateFinished: dateFinished ?? this.dateFinished,
       notes: notes ?? this.notes,
+      originalTitle: originalTitle ?? this.originalTitle,
+      romajiTitle: romajiTitle ?? this.romajiTitle,
+      originalAuthor: originalAuthor ?? this.originalAuthor,
       externalRating: externalRating ?? this.externalRating,
       externalRatingCount: externalRatingCount ?? this.externalRatingCount,
       externalRatingSource: externalRatingSource ?? this.externalRatingSource,

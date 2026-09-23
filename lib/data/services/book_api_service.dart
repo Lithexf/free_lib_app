@@ -44,19 +44,19 @@ class BookApiService {
     // ── Strategy 1: Google Books (best metadata + ratings) ──
     for (final format in formats) {
       final result = await _lookupGoogleBooks(format);
-      if (result != null) return result;
+      if (result != null) return _applyTranslation(result);
     }
 
     // ── Strategy 2: Open Library direct ISBN lookup ──
     for (final format in formats) {
       final result = await _lookupOpenLibrary(format);
-      if (result != null) return result;
+      if (result != null) return _applyTranslation(result);
     }
 
     // ── Strategy 3: Open Library Search API (broadest coverage) ──
     // Catches manga, comics, international editions that direct lookup misses
     final searchResult = await _searchOpenLibrary(isbn);
-    if (searchResult != null) return searchResult;
+    if (searchResult != null) return _applyTranslation(searchResult);
 
     return null;
   }
@@ -360,6 +360,102 @@ class BookApiService {
       return contentLength > 1000;
     } catch (_) {
       return false;
+    }
+  }
+
+  // ── Translation & Romanization ──
+
+  /// Automatically translates and romanizes Japanese titles and authors.
+  Future<Book> _applyTranslation(Book book) async {
+    String? originalTitle;
+    String? romajiTitle;
+    String newTitle = book.title;
+
+    String? originalAuthor;
+    String? newAuthor = book.authors;
+
+    // Process Title
+    if (_isJapanese(book.title)) {
+      final trans = await _translateJapaneseText(book.title);
+      if (trans != null) {
+        originalTitle = book.title;
+        // If English is available, use it and store Romaji separately
+        if (trans.$1 != null) {
+          newTitle = trans.$1!;
+          romajiTitle = trans.$2;
+        } else {
+          // If no English, use Romaji as main title
+          newTitle = trans.$2 ?? book.title;
+        }
+      }
+    }
+
+    // Process Author
+    if (book.authors != null && _isJapanese(book.authors!)) {
+      final trans = await _translateJapaneseText(book.authors!);
+      if (trans != null) {
+        originalAuthor = book.authors;
+        // Prefer Romaji for author names
+        newAuthor = trans.$2 ?? trans.$1 ?? book.authors;
+      }
+    }
+
+    if (originalTitle != null || originalAuthor != null) {
+      return book.copyWith(
+        title: newTitle,
+        authors: newAuthor,
+        originalTitle: originalTitle,
+        romajiTitle: romajiTitle,
+        originalAuthor: originalAuthor,
+      );
+    }
+    return book;
+  }
+
+  /// Checks if a string contains Japanese Kanji, Hiragana, or Katakana.
+  bool _isJapanese(String text) {
+    return RegExp(r'[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]').hasMatch(text);
+  }
+
+  /// Fetches translation and romaji using Google Translate's free web endpoint.
+  /// Returns (English Translation, Romaji String) or null if failed.
+  Future<(String?, String?)?> _translateJapaneseText(String text) async {
+    try {
+      final response = await _dio.get(
+        'https://translate.googleapis.com/translate_a/single',
+        queryParameters: {
+          'client': 'gtx',
+          'sl': 'ja',
+          'tl': 'en',
+          'dt': ['t', 'rm'],
+          'q': text,
+        },
+      );
+
+      final data = response.data as List<dynamic>?;
+      if (data == null || data.isEmpty) return null;
+
+      final sections = data[0] as List<dynamic>?;
+      if (sections == null || sections.isEmpty) return null;
+
+      String? englishText;
+      String? romajiText;
+
+      // Extract English translation (first item in the first inner list usually)
+      final firstSection = sections.first as List<dynamic>?;
+      if (firstSection != null && firstSection.isNotEmpty) {
+        englishText = firstSection[0] as String?;
+      }
+
+      // Extract Romaji (often the last item in the sections list has the transliteration)
+      final lastSection = sections.last as List<dynamic>?;
+      if (lastSection != null && lastSection.length > 3) {
+        romajiText = lastSection[3] as String?;
+      }
+
+      return (englishText, romajiText);
+    } catch (_) {
+      return null;
     }
   }
 }

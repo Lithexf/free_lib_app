@@ -212,6 +212,27 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
               ),
             ),
           ],
+          if (_book.romajiTitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              _book.romajiTitle!,
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 14,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+          if (_book.originalTitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              _book.originalTitle!,
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 14,
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
 
           // Authors
@@ -222,6 +243,14 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                 color: AppColors.secondary,
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
+              ),
+            ),
+          if (_book.originalAuthor != null)
+            Text(
+              _book.originalAuthor!,
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 13,
               ),
             ),
           const SizedBox(height: 20),

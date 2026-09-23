@@ -28,7 +28,7 @@ class AppDatabase {
     final path = p.join(dir.path, 'freelib.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -54,6 +54,9 @@ class AppDatabase {
         date_started INTEGER,
         date_finished INTEGER,
         notes TEXT,
+        original_title TEXT,
+        romaji_title TEXT,
+        original_author TEXT,
         external_rating REAL,
         external_rating_count INTEGER,
         external_rating_source TEXT
@@ -72,6 +75,12 @@ class AppDatabase {
       await db.execute('ALTER TABLE books ADD COLUMN external_rating REAL');
       await db.execute('ALTER TABLE books ADD COLUMN external_rating_count INTEGER');
       await db.execute('ALTER TABLE books ADD COLUMN external_rating_source TEXT');
+    }
+    if (oldVersion < 3) {
+      // v3: Add original Japanese title and author columns for translation/search
+      await db.execute('ALTER TABLE books ADD COLUMN original_title TEXT');
+      await db.execute('ALTER TABLE books ADD COLUMN romaji_title TEXT');
+      await db.execute('ALTER TABLE books ADD COLUMN original_author TEXT');
     }
   }
 
@@ -163,8 +172,8 @@ class AppDatabase {
     final db = await database;
     final maps = await db.query(
       'books',
-      where: 'title LIKE ? OR authors LIKE ?',
-      whereArgs: ['%$query%', '%$query%'],
+      where: 'title LIKE ? OR authors LIKE ? OR original_title LIKE ? OR romaji_title LIKE ? OR original_author LIKE ?',
+      whereArgs: ['%$query%', '%$query%', '%$query%', '%$query%', '%$query%'],
       orderBy: 'title ASC',
     );
     return maps.map((m) => Book.fromMap(m)).toList();
