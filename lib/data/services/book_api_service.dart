@@ -124,11 +124,17 @@ class BookApiService {
           .whereType<String>()
           .join(', ');
 
-      // Extract publishers
+      // Extract publishers (may be strings or objects with 'name' key)
       final publishers = details['publishers'] as List<dynamic>?;
-      final publisher = publishers?.isNotEmpty == true
-          ? publishers!.first as String
-          : null;
+      String? publisher;
+      if (publishers != null && publishers.isNotEmpty) {
+        final first = publishers.first;
+        if (first is String) {
+          publisher = first;
+        } else if (first is Map<String, dynamic>) {
+          publisher = first['name'] as String?;
+        }
+      }
 
       // Cover URL — try thumbnail from response, otherwise construct directly
       String? coverUrl = entry['thumbnail_url'] as String?;

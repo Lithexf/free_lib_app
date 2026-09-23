@@ -125,10 +125,151 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: Column(
         children: [
           _buildAppBar(),
+          _buildBookCounter(),
           _buildFilterChips(),
           Expanded(child: _buildBookList()),
         ],
       ),
+    );
+  }
+
+  Widget _buildBookCounter() {
+    final bookCount = ref.watch(bookListProvider).valueOrNull?.length ?? 0;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.primary.withValues(alpha: 0.12),
+              AppColors.secondary.withValues(alpha: 0.08),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.25),
+          ),
+        ),
+        child: Row(
+          children: [
+            // Icon with gradient background
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primary, AppColors.primaryLight],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.menu_book_rounded,
+                color: AppColors.background,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+
+            // Count + label
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TweenAnimationBuilder<int>(
+                    tween: IntTween(begin: 0, end: bookCount),
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, child) {
+                      return Text(
+                        '$value',
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          height: 1.1,
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Books Owned',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Small stats preview
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _buildMiniStat(
+                  Icons.auto_stories,
+                  AppColors.accent,
+                  '${_getStatusCount('reading')}',
+                  'Reading',
+                ),
+                const SizedBox(height: 4),
+                _buildMiniStat(
+                  Icons.check_circle_outline,
+                  AppColors.primary,
+                  '${_getStatusCount('completed')}',
+                  'Done',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  int _getStatusCount(String status) {
+    final books = ref.watch(bookListProvider).valueOrNull ?? [];
+    return books.where((b) => b.status == status).length;
+  }
+
+  Widget _buildMiniStat(IconData icon, Color color, String count, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 4),
+        Text(
+          count,
+          style: TextStyle(
+            color: color,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(width: 3),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textMuted,
+            fontSize: 11,
+          ),
+        ),
+      ],
     );
   }
 

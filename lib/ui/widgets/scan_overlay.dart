@@ -5,7 +5,7 @@ import '../theme/app_colors.dart';
 /// Custom scanner overlay with animated scan window.
 ///
 /// Draws a semi-transparent dark background with a clear scanning window,
-/// animated border, and instruction text.
+/// animated border, and instruction text positioned above the window.
 class ScanOverlay extends StatefulWidget {
   const ScanOverlay({super.key});
 
@@ -39,25 +39,45 @@ class _ScanOverlayState extends State<ScanOverlay>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) {
-        return CustomPaint(
-          painter: _ScanOverlayPainter(animationValue: _animation.value),
-          child: child,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Square scan window — responsive to screen size
+        // Use the smaller of width*0.65 or height*0.35 to ensure it fits
+        final scanSize = min(constraints.maxWidth * 0.65, constraints.maxHeight * 0.35);
+
+        // Center the scan window vertically, shifted slightly up to leave room
+        // for the bottom bar (manual ISBN entry)
+        final left = (constraints.maxWidth - scanSize) / 2;
+        final top = (constraints.maxHeight - scanSize) / 2 - constraints.maxHeight * 0.08;
+
+        return AnimatedBuilder(
+          animation: _animation,
+          builder: (context, child) {
+            return CustomPaint(
+              size: Size(constraints.maxWidth, constraints.maxHeight),
+              painter: _ScanOverlayPainter(
+                animationValue: _animation.value,
+                scanLeft: left,
+                scanTop: top,
+                scanSize: scanSize,
+              ),
+              child: child,
+            );
+          },
+          child: _buildInstructionText(top),
         );
       },
-      child: _buildInstructionText(),
     );
   }
 
-  Widget _buildInstructionText() {
+  Widget _buildInstructionText(double scanTop) {
     return SafeArea(
       child: Column(
         children: [
-          const Spacer(),
+          // Position the text above the scan window
+          SizedBox(height: max(scanTop - 50, 60)),
           Container(
-            margin: const EdgeInsets.only(bottom: 80),
+            margin: const EdgeInsets.symmetric(horizontal: 32),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             decoration: BoxDecoration(
               color: AppColors.background.withValues(alpha: 0.7),
@@ -75,6 +95,7 @@ class _ScanOverlayState extends State<ScanOverlay>
               ),
             ),
           ),
+          const Spacer(),
         ],
       ),
     );
@@ -83,18 +104,21 @@ class _ScanOverlayState extends State<ScanOverlay>
 
 class _ScanOverlayPainter extends CustomPainter {
   final double animationValue;
+  final double scanLeft;
+  final double scanTop;
+  final double scanSize;
 
-  _ScanOverlayPainter({required this.animationValue});
+  _ScanOverlayPainter({
+    required this.animationValue,
+    required this.scanLeft,
+    required this.scanTop,
+    required this.scanSize,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final scanWindowWidth = size.width * 0.7;
-    final scanWindowHeight = scanWindowWidth * 0.6;
-    final left = (size.width - scanWindowWidth) / 2;
-    final top = (size.height - scanWindowHeight) / 2 - 40;
-
     final scanRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(left, top, scanWindowWidth, scanWindowHeight),
+      Rect.fromLTWH(scanLeft, scanTop, scanSize, scanSize),
       const Radius.circular(20),
     );
 
@@ -133,13 +157,13 @@ class _ScanOverlayPainter extends CustomPainter {
           AppColors.primary.withValues(alpha: 0.0),
         ],
       ).createShader(
-        Rect.fromLTWH(left + 10, scanLineY, scanWindowWidth - 20, 2),
+        Rect.fromLTWH(scanLeft + 10, scanLineY, scanSize - 20, 2),
       )
       ..strokeWidth = 2;
 
     canvas.drawLine(
-      Offset(left + 20, scanLineY),
-      Offset(left + scanWindowWidth - 20, scanLineY),
+      Offset(scanLeft + 20, scanLineY),
+      Offset(scanLeft + scanSize - 20, scanLineY),
       scanLinePaint,
     );
   }
@@ -220,6 +244,7 @@ class _ScanOverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ScanOverlayPainter oldDelegate) {
-    return oldDelegate.animationValue != animationValue;
+    return oldDelegate.animationValue != animationValue ||
+        oldDelegate.scanSize != scanSize;
   }
 }

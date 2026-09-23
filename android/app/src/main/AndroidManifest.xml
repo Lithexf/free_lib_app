@@ -38,7 +38,7 @@
         <!-- Pre-download the ML Kit barcode model to prevent scanner startup errors -->
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
-            android:value="barcode_ui"/>
+            android:value="barcode"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

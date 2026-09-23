@@ -5,6 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../data/services/isbn_validator.dart';
 import '../../providers/book_providers.dart';
+import '../../providers/database_provider.dart';
 import '../../ui/theme/app_colors.dart';
 import '../widgets/scan_overlay.dart';
 import 'book_detail_screen.dart';
@@ -77,58 +78,74 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Camera preview
-          MobileScanner(
-            controller: _controller!,
-            onDetect: _onDetect,
-            errorBuilder: (context, error) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.error_outline, color: AppColors.error, size: 48),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Scanner Error\n\n${error.errorDetails?.message ?? "Please ensure camera permissions are granted and Google Play Services is up to date."}',
-                        style: const TextStyle(color: Colors.white),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+          // Camera preview — fills entire screen
+          Positioned.fill(
+            child: MobileScanner(
+              controller: _controller!,
+              onDetect: _onDetect,
+              errorBuilder: (context, error) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.error_outline, color: AppColors.error, size: 48),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Scanner Error\n\n${error.errorDetails?.message ?? "Please ensure camera permissions are granted and Google Play Services is up to date."}',
+                          style: const TextStyle(color: Colors.white),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
 
-          // Scan overlay
-          const ScanOverlay(),
+          // Scan overlay (darkens background, draws square frame)
+          const Positioned.fill(
+            child: ScanOverlay(),
+          ),
 
           // Top bar with controls
-          _buildTopBar(),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: _buildTopBar(),
+          ),
 
-          // Bottom bar with manual entry
-          _buildBottomBar(),
+          // Bottom bar with manual entry — anchored to bottom
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _buildBottomBar(),
+          ),
 
           // Processing indicator
           if (_isProcessing)
-            Container(
-              color: Colors.black54,
-              child: const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(color: AppColors.primary),
-                    SizedBox(height: 16),
-                    Text(
-                      'Looking up book...',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
+            Positioned.fill(
+              child: Container(
+                color: Colors.black54,
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: AppColors.primary),
+                      SizedBox(height: 16),
+                      Text(
+                        'Looking up book...',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 16,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -139,6 +156,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
 
   Widget _buildTopBar() {
     return SafeArea(
+      bottom: false,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -184,25 +202,23 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
   }
 
   Widget _buildBottomBar() {
-    return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 0,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.transparent,
-              AppColors.background.withValues(alpha: 0.9),
-              AppColors.background,
-            ],
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            AppColors.background.withValues(alpha: 0.85),
+            AppColors.background,
+          ],
+          stops: const [0.0, 0.4, 1.0],
         ),
-        child: SafeArea(
-          top: false,
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 32, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -237,17 +253,33 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
                           borderSide:
                               const BorderSide(color: AppColors.surfaceBorder),
                         ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                              const BorderSide(color: AppColors.surfaceBorder),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                              const BorderSide(color: AppColors.primary, width: 2),
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: _onManualSubmit,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 16),
+                  SizedBox(
+                    height: 52,
+                    width: 52,
+                    child: ElevatedButton(
+                      onPressed: _onManualSubmit,
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Icon(Icons.search_rounded, size: 24),
                     ),
-                    child: const Icon(Icons.search_rounded),
                   ),
                 ],
               ),
@@ -379,23 +411,27 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
   Future<void> _processIsbn(String isbn) async {
     if (_isProcessing) return;
 
-    // Check for duplicate scan
-    final existingBooks = ref.read(bookListProvider).valueOrNull ?? [];
-    if (existingBooks.any((b) => b.isbn == isbn)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You already scanned this book!'),
-          backgroundColor: AppColors.accent,
-        ),
-      );
-      return;
-    }
-
     setState(() => _isProcessing = true);
 
     try {
       // Pause scanner while processing
       _controller?.stop();
+
+      // Check for duplicate via database (authoritative source, not in-memory)
+      final db = ref.read(databaseProvider);
+      final existing = await db.getBookByIsbn(isbn);
+      if (existing != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('"${existing.title}" is already in your library!'),
+              backgroundColor: AppColors.accent,
+            ),
+          );
+          _controller?.start();
+        }
+        return;
+      }
 
       final book = await ref.read(bookListProvider.notifier).scanAndAdd(isbn);
 
