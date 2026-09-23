@@ -1,11 +1,11 @@
 import 'package:dio/dio.dart';
 import '../models/book.dart';
 import 'isbn_validator.dart';
-/// --test 
+
 /// Service for fetching book metadata from external APIs.
 ///
 /// Uses a layered fallback strategy:
-/// 1. Google Books API (richer metadata, requires API key — optional)
+/// 1. Google Books API (richer metadata, includes community ratings)
 /// 2. Open Library API (free, no key needed)
 /// 3. Open Library Covers API (direct URL construction)
 class BookApiService {
@@ -74,6 +74,10 @@ class BookApiService {
       final authors = volumeInfo['authors'] as List<dynamic>?;
       final categories = volumeInfo['categories'] as List<dynamic>?;
 
+      // Extract community rating from Google Books
+      final avgRating = (volumeInfo['averageRating'] as num?)?.toDouble();
+      final ratingsCount = volumeInfo['ratingsCount'] as int?;
+
       return Book(
         isbn: isbn,
         title: volumeInfo['title'] as String? ?? 'Unknown Title',
@@ -86,6 +90,9 @@ class BookApiService {
         categories: categories?.join(', '),
         coverUrl: coverUrl,
         dateAdded: DateTime.now(),
+        externalRating: avgRating,
+        externalRatingCount: ratingsCount,
+        externalRatingSource: avgRating != null ? 'Google Books' : null,
       );
     } on DioException {
       // Network error — fall through to next provider
@@ -159,6 +166,21 @@ class BookApiService {
           .whereType<String>()
           .join(', ');
 
+      // Try to fetch Open Library community ratings via the works key
+      double? externalRating;
+      int? externalRatingCount;
+      String? externalRatingSource;
+
+      final worksKey = _extractWorksKey(details);
+      if (worksKey != null) {
+        final ratings = await _fetchOpenLibraryRatings(worksKey);
+        if (ratings != null) {
+          externalRating = ratings.$1;
+          externalRatingCount = ratings.$2;
+          externalRatingSource = 'Open Library';
+        }
+      }
+
       return Book(
         isbn: isbn,
         title: details['title'] as String? ?? 'Unknown Title',
@@ -171,9 +193,51 @@ class BookApiService {
         categories: categories,
         coverUrl: coverUrl,
         dateAdded: DateTime.now(),
+        externalRating: externalRating,
+        externalRatingCount: externalRatingCount,
+        externalRatingSource: externalRatingSource,
       );
     } on DioException {
       return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Extract the Open Library works key from book details.
+  /// The `works` field contains entries like `{"key": "/works/OL12345W"}`.
+  String? _extractWorksKey(Map<String, dynamic> details) {
+    try {
+      final works = details['works'] as List<dynamic>?;
+      if (works == null || works.isEmpty) return null;
+      final firstWork = works.first as Map<String, dynamic>;
+      final key = firstWork['key'] as String?; // e.g. "/works/OL12345W"
+      return key;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Fetch community ratings from Open Library's ratings API.
+  /// Returns (averageRating, ratingsCount) or null if unavailable.
+  Future<(double, int)?> _fetchOpenLibraryRatings(String worksKey) async {
+    try {
+      // worksKey is like "/works/OL12345W"
+      final response = await _dio.get(
+        'https://openlibrary.org$worksKey/ratings.json',
+      );
+
+      final data = response.data as Map<String, dynamic>;
+      final summary = data['summary'] as Map<String, dynamic>?;
+      if (summary == null) return null;
+
+      final average = (summary['average'] as num?)?.toDouble();
+      final count = summary['count'] as int? ?? 0;
+
+      if (average == null || average <= 0 || count == 0) return null;
+
+      // Open Library ratings are on a 1–5 scale
+      return (average, count);
     } catch (_) {
       return null;
     }

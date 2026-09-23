@@ -28,8 +28,9 @@ class AppDatabase {
     final path = p.join(dir.path, 'freelib.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -52,7 +53,10 @@ class AppDatabase {
         date_added INTEGER NOT NULL,
         date_started INTEGER,
         date_finished INTEGER,
-        notes TEXT
+        notes TEXT,
+        external_rating REAL,
+        external_rating_count INTEGER,
+        external_rating_source TEXT
       )
     ''');
 
@@ -60,6 +64,15 @@ class AppDatabase {
     await db.execute('CREATE INDEX idx_books_status ON books (status)');
     await db.execute('CREATE INDEX idx_books_title ON books (title)');
     await db.execute('CREATE INDEX idx_books_isbn ON books (isbn)');
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // v2: Add external (community) rating columns
+      await db.execute('ALTER TABLE books ADD COLUMN external_rating REAL');
+      await db.execute('ALTER TABLE books ADD COLUMN external_rating_count INTEGER');
+      await db.execute('ALTER TABLE books ADD COLUMN external_rating_source TEXT');
+    }
   }
 
   // ── CRUD Operations ──

@@ -21,6 +21,16 @@ class Book {
   final DateTime? dateFinished;
   final String? notes;
 
+  // ── External (community) rating data ──
+  /// Average rating from external source (Google Books / Open Library), 1.0–5.0 scale
+  final double? externalRating;
+
+  /// Number of ratings from the external source
+  final int? externalRatingCount;
+
+  /// Name of the external rating source (e.g. "Google Books", "Open Library")
+  final String? externalRatingSource;
+
   const Book({
     this.id,
     required this.isbn,
@@ -39,6 +49,9 @@ class Book {
     this.dateStarted,
     this.dateFinished,
     this.notes,
+    this.externalRating,
+    this.externalRatingCount,
+    this.externalRatingSource,
   });
 
   /// Create a Book from a JSON map (database row or API response)
@@ -65,6 +78,9 @@ class Book {
           ? DateTime.fromMillisecondsSinceEpoch(map['date_finished'] as int)
           : null,
       notes: map['notes'] as String?,
+      externalRating: (map['external_rating'] as num?)?.toDouble(),
+      externalRatingCount: map['external_rating_count'] as int?,
+      externalRatingSource: map['external_rating_source'] as String?,
     );
   }
 
@@ -88,6 +104,9 @@ class Book {
       'date_started': dateStarted?.millisecondsSinceEpoch,
       'date_finished': dateFinished?.millisecondsSinceEpoch,
       'notes': notes,
+      'external_rating': externalRating,
+      'external_rating_count': externalRatingCount,
+      'external_rating_source': externalRatingSource,
     };
   }
 
@@ -110,6 +129,9 @@ class Book {
     DateTime? dateStarted,
     DateTime? dateFinished,
     String? notes,
+    double? externalRating,
+    int? externalRatingCount,
+    String? externalRatingSource,
   }) {
     return Book(
       id: id ?? this.id,
@@ -129,6 +151,9 @@ class Book {
       dateStarted: dateStarted ?? this.dateStarted,
       dateFinished: dateFinished ?? this.dateFinished,
       notes: notes ?? this.notes,
+      externalRating: externalRating ?? this.externalRating,
+      externalRatingCount: externalRatingCount ?? this.externalRatingCount,
+      externalRatingSource: externalRatingSource ?? this.externalRatingSource,
     );
   }
 

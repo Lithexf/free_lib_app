@@ -228,26 +228,79 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
 
           // ── Rating Section ──
           _buildSection(
-            'Your Rating',
-            child: RatingBar.builder(
-              initialRating: _rating,
-              minRating: 0,
-              direction: Axis.horizontal,
-              allowHalfRating: true,
-              itemCount: 5,
-              itemSize: 36,
-              unratedColor: AppColors.surfaceLight,
-              glowColor: AppColors.primary.withValues(alpha: 0.3),
-              itemBuilder: (context, _) => const Icon(
-                Icons.star_rounded,
-                color: AppColors.primary,
-              ),
-              onRatingUpdate: (rating) {
-                setState(() {
-                  _rating = rating;
-                  _hasChanges = true;
-                });
-              },
+            'Ratings',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // User's personal rating
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.surfaceBorder),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.person_rounded,
+                            color: AppColors.primary,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Your Rating',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (_rating > 0)
+                            Text(
+                              _rating.toStringAsFixed(1),
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      RatingBar.builder(
+                        initialRating: _rating,
+                        minRating: 0,
+                        direction: Axis.horizontal,
+                        allowHalfRating: true,
+                        itemCount: 5,
+                        itemSize: 36,
+                        unratedColor: AppColors.surfaceLight,
+                        glowColor: AppColors.primary.withValues(alpha: 0.3),
+                        itemBuilder: (context, _) => const Icon(
+                          Icons.star_rounded,
+                          color: AppColors.primary,
+                        ),
+                        onRatingUpdate: (rating) {
+                          setState(() {
+                            _rating = rating;
+                            _hasChanges = true;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Community / External rating
+                _buildCommunityRatingCard(),
+              ],
             ),
           ),
 
@@ -430,6 +483,212 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildCommunityRatingCard() {
+    final extRating = _book.externalRating;
+    final extCount = _book.externalRatingCount;
+    final extSource = _book.externalRatingSource;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.surfaceBorder),
+      ),
+      child: extRating != null && extRating > 0
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.people_rounded,
+                      color: AppColors.secondary,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Community Rating',
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    // Source badge
+                    if (extSource != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.secondary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: AppColors.secondary.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Text(
+                          extSource,
+                          style: const TextStyle(
+                            color: AppColors.secondary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // Score + stars row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // Big average number
+                    Text(
+                      extRating.toStringAsFixed(1),
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        '/ 5',
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+
+                    // Star visualization
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: List.generate(5, (i) {
+                              final starValue = i + 1;
+                              if (extRating >= starValue) {
+                                return const Icon(Icons.star_rounded,
+                                    size: 20, color: AppColors.secondary);
+                              } else if (extRating >= starValue - 0.5) {
+                                return const Icon(Icons.star_half_rounded,
+                                    size: 20, color: AppColors.secondary);
+                              } else {
+                                return Icon(Icons.star_rounded,
+                                    size: 20,
+                                    color: AppColors.surfaceLight);
+                              }
+                            }),
+                          ),
+                          if (extCount != null && extCount > 0) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              _formatRatingCount(extCount),
+                              style: const TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Comparison hint when user has also rated
+                if (_rating > 0) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _rating > extRating
+                              ? Icons.arrow_upward_rounded
+                              : _rating < extRating
+                                  ? Icons.arrow_downward_rounded
+                                  : Icons.drag_handle_rounded,
+                          size: 16,
+                          color: _rating > extRating
+                              ? AppColors.accent
+                              : _rating < extRating
+                                  ? AppColors.error
+                                  : AppColors.textMuted,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _rating == extRating
+                                ? 'Your rating matches the community average!'
+                                : _rating > extRating
+                                    ? 'You rated this ${(_rating - extRating).toStringAsFixed(1)} higher than average'
+                                    : 'You rated this ${(extRating - _rating).toStringAsFixed(1)} lower than average',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            )
+          : Row(
+              children: [
+                const Icon(
+                  Icons.people_rounded,
+                  color: AppColors.textMuted,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Community Rating',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                const Text(
+                  'Not available',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  String _formatRatingCount(int count) {
+    if (count >= 1000000) {
+      return '${(count / 1000000).toStringAsFixed(1)}M ratings';
+    } else if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(1)}K ratings';
+    }
+    return '$count ratings';
   }
 
   void _onStatusChanged(ReadingStatus status) {
