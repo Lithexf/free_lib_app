@@ -1,6 +1,5 @@
 # FreeLib
 
-<<<<<<< HEAD
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 ![Total lines](https://img.shields.io/badge/total%20lines-~4.3k-blue)
 ![Language](https://img.shields.io/badge/language-Dart-blue)
