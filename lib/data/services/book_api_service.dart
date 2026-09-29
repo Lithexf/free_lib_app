@@ -58,6 +58,10 @@ class BookApiService {
     final searchResult = await _searchOpenLibrary(isbn);
     if (searchResult != null) return _applyTranslation(searchResult);
 
+    // ── Strategy 4: Moly.hu Scraper (for Hungarian/European editions) ──
+    final molyResult = await _lookupMoly(isbn);
+    if (molyResult != null) return _applyTranslation(molyResult);
+
     return null;
   }
 
@@ -123,6 +127,77 @@ class BookApiService {
       );
     } on DioException {
       return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ── Moly.hu (Hungarian database scraper) ──
+
+  Future<Book?> _lookupMoly(String isbn) async {
+    try {
+      final response = await _dio.get(
+        'https://moly.hu/kereses',
+        queryParameters: {'q': isbn},
+        options: Options(
+          followRedirects: true,
+          validateStatus: (status) => status! < 500,
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept':
+                'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'hu-HU,hu;q=0.9,en-US;q=0.8,en;q=0.7',
+          },
+        ),
+      );
+
+      final html = response.data as String;
+      if (html.contains('Nincs találat') || html.contains('Nem található')) {
+        return null;
+      }
+
+      // Parse title and author from <title> tag
+      // Format usually: "Author: Title · Moly" or "Title · Moly"
+      final titleMatch = RegExp(r'<title>(.*?) · Moly<\/title>').firstMatch(html);
+      if (titleMatch == null) return null;
+
+      final pageTitle = titleMatch.group(1) ?? '';
+      String author = '';
+      String title = pageTitle;
+
+      if (pageTitle.contains(': ')) {
+        final parts = pageTitle.split(': ');
+        author = parts.first.trim();
+        title = parts.sublist(1).join(': ').trim();
+      }
+
+      // Parse cover URL
+      // Look for a link to the big cover image or an img tag
+      final coverMatch = RegExp(r'(https:\/\/moly\.hu\/system\/covers\/big\/.*?\.jpg)').firstMatch(html);
+      String? coverUrl = coverMatch?.group(1);
+
+      // Parse community rating if available
+      // e.g., <span class="rating">89</span> or similar... Moly uses percentages, e.g. 93%
+      double? externalRating;
+      final ratingMatch = RegExp(r'(\d+)%<\/span>').firstMatch(html);
+      if (ratingMatch != null) {
+        final percentage = double.tryParse(ratingMatch.group(1) ?? '0');
+        if (percentage != null && percentage > 0) {
+          // Convert percentage (0-100) to 5-star scale
+          externalRating = (percentage / 20).clamp(0.0, 5.0);
+        }
+      }
+
+      return Book(
+        isbn: isbn,
+        title: title.isEmpty ? 'Unknown Title' : title,
+        authors: author.isEmpty ? null : author,
+        coverUrl: coverUrl,
+        dateAdded: DateTime.now(),
+        externalRating: externalRating,
+        externalRatingSource: externalRating != null ? 'Moly.hu' : null,
+      );
     } catch (_) {
       return null;
     }

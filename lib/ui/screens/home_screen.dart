@@ -88,8 +88,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         setState(() => _currentTab = index);
       },
       behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+      child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
@@ -188,21 +187,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TweenAnimationBuilder<int>(
-                    tween: IntTween(begin: 0, end: bookCount),
-                    duration: const Duration(milliseconds: 600),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, value, child) {
-                      return Text(
-                        '$value',
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          height: 1.1,
-                        ),
-                      );
-                    },
+                  Text(
+                    '$bookCount',
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   const Text(

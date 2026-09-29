@@ -20,8 +20,7 @@ class StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+      child: Container(
         padding: EdgeInsets.symmetric(
           horizontal: compact ? 8 : 12,
           vertical: compact ? 4 : 6,

@@ -6,36 +6,8 @@ import '../theme/app_colors.dart';
 ///
 /// Draws a semi-transparent dark background with a clear scanning window,
 /// animated border, and instruction text positioned above the window.
-class ScanOverlay extends StatefulWidget {
+class ScanOverlay extends StatelessWidget {
   const ScanOverlay({super.key});
-
-  @override
-  State<ScanOverlay> createState() => _ScanOverlayState();
-}
-
-class _ScanOverlayState extends State<ScanOverlay>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(seconds: 2),
-      vsync: this,
-    )..repeat(reverse: true);
-
-    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,20 +22,14 @@ class _ScanOverlayState extends State<ScanOverlay>
         final left = (constraints.maxWidth - scanSize) / 2;
         final top = (constraints.maxHeight - scanSize) / 2 - constraints.maxHeight * 0.08;
 
-        return AnimatedBuilder(
-          animation: _animation,
-          builder: (context, child) {
-            return CustomPaint(
-              size: Size(constraints.maxWidth, constraints.maxHeight),
-              painter: _ScanOverlayPainter(
-                animationValue: _animation.value,
-                scanLeft: left,
-                scanTop: top,
-                scanSize: scanSize,
-              ),
-              child: child,
-            );
-          },
+        return CustomPaint(
+          size: Size(constraints.maxWidth, constraints.maxHeight),
+          painter: _ScanOverlayPainter(
+            animationValue: 0.5,
+            scanLeft: left,
+            scanTop: top,
+            scanSize: scanSize,
+          ),
           child: _buildInstructionText(top),
         );
       },
