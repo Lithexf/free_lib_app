@@ -376,27 +376,41 @@ class BookApiService {
 
     // Process Title
     if (_isJapanese(book.title)) {
-      final trans = await _translateJapaneseText(book.title);
-      if (trans != null) {
-        originalTitle = book.title;
-        // If English is available, use it and store Romaji separately
-        if (trans.$1 != null) {
-          newTitle = trans.$1!;
-          romajiTitle = trans.$2;
-        } else {
-          // If no English, use Romaji as main title
-          newTitle = trans.$2 ?? book.title;
+      originalTitle = book.title;
+      // 1. Try Open Library for official English title
+      final officialTitle = await _fetchOfficialTitle(book.title);
+      if (officialTitle != null) {
+        newTitle = officialTitle.toTitleCase();
+        // Fallback romaji to title case google translate if possible
+        final trans = await _translateJapaneseText(book.title);
+        if (trans != null) romajiTitle = trans.$2?.toTitleCase();
+      } else {
+        // 2. Fallback to Google Translate
+        final trans = await _translateJapaneseText(book.title);
+        if (trans != null) {
+          if (trans.$1 != null) {
+            newTitle = trans.$1!.toTitleCase();
+            romajiTitle = trans.$2?.toTitleCase();
+          } else {
+            newTitle = (trans.$2 ?? book.title).toTitleCase();
+          }
         }
       }
     }
 
     // Process Author
     if (book.authors != null && _isJapanese(book.authors!)) {
-      final trans = await _translateJapaneseText(book.authors!);
-      if (trans != null) {
-        originalAuthor = book.authors;
-        // Prefer Romaji for author names
-        newAuthor = trans.$2 ?? trans.$1 ?? book.authors;
+      originalAuthor = book.authors;
+      // 1. Try Open Library for official Author name
+      final officialAuthor = await _fetchOfficialAuthorName(book.authors!);
+      if (officialAuthor != null) {
+        newAuthor = officialAuthor.toTitleCase();
+      } else {
+        // 2. Fallback to Google Translate
+        final trans = await _translateJapaneseText(book.authors!);
+        if (trans != null) {
+          newAuthor = (trans.$2 ?? trans.$1 ?? book.authors!).toTitleCase();
+        }
       }
     }
 
@@ -457,5 +471,85 @@ class BookApiService {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Searches Open Library for an author and looks for an English/Romaji alternate name.
+  Future<String?> _fetchOfficialAuthorName(String japaneseName) async {
+    try {
+      final response = await _dio.get(
+        'https://openlibrary.org/search/authors.json',
+        queryParameters: {'q': japaneseName},
+      );
+      final data = response.data;
+      if (data['docs'] == null || (data['docs'] as List).isEmpty) return null;
+
+      final doc = data['docs'][0];
+      final alternates = doc['alternate_names'] as List<dynamic>?;
+      if (alternates == null) return null;
+
+      // Find an alternate name that contains only ASCII characters (English/Romaji)
+      for (final alt in alternates) {
+        final name = alt.toString();
+        if (!_isJapanese(name) && RegExp(r'^[a-zA-Z\s\.\-]+$').hasMatch(name)) {
+          return name;
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Searches Open Library for a title and looks for an English alternate title.
+  Future<String?> _fetchOfficialTitle(String japaneseTitle) async {
+    try {
+      final response = await _dio.get(
+        'https://openlibrary.org/search.json',
+        queryParameters: {'title': japaneseTitle},
+      );
+      final data = response.data;
+      if (data['docs'] == null || (data['docs'] as List).isEmpty) return null;
+
+      final doc = data['docs'][0];
+      
+      // Check alternate titles
+      final alternates = doc['alternative_title'] as List<dynamic>?;
+      if (alternates != null) {
+        for (final alt in alternates) {
+          final title = alt.toString();
+          if (!_isJapanese(title) && RegExp(r'^[a-zA-Z0-9\s\.\-\:\,\!\?]+$').hasMatch(title)) {
+            return title;
+          }
+        }
+      }
+
+      // If the main title of the best match is English, use that
+      final mainTitle = doc['title']?.toString();
+      if (mainTitle != null && !_isJapanese(mainTitle) && RegExp(r'^[a-zA-Z0-9\s\.\-\:\,\!\?]+$').hasMatch(mainTitle)) {
+        return mainTitle;
+      }
+
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+extension StringCasingExtension on String {
+  /// Converts a string to Title Case (e.g. "three days of happiness" -> "Three Days of Happiness")
+  String toTitleCase() {
+    if (trim().isEmpty) return this;
+    final exceptions = {'a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'on', 'at', 'to', 'from', 'by', 'of', 'in'};
+    
+    return split(' ').asMap().map((index, word) {
+      if (word.isEmpty) return MapEntry(index, '');
+      final lowerWord = word.toLowerCase();
+      // Capitalize first/last word, or if it's not in exceptions
+      if (index == 0 || index == split(' ').length - 1 || !exceptions.contains(lowerWord)) {
+        return MapEntry(index, word[0].toUpperCase() + lowerWord.substring(1));
+      }
+      return MapEntry(index, lowerWord);
+    }).values.join(' ');
   }
 }
