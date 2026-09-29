@@ -76,13 +76,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = _currentTab == index;
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         if (index == 1) {
           // Open scanner as a full page
-          Navigator.push(
+          await Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const ScannerScreen()),
           );
+          ref.read(bookListProvider.notifier).refresh();
           return;
         }
         setState(() => _currentTab = index);
@@ -474,10 +475,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         if (books.isEmpty) {
           return EmptyState(
             actionLabel: 'Szkenneld be az első könyved',
-            onAction: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ScannerScreen()),
-            ),
+            onAction: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ScannerScreen()),
+              );
+              ref.read(bookListProvider.notifier).refresh();
+            },
           );
         }
 

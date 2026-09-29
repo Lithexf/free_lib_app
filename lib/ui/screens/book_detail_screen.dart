@@ -46,13 +46,25 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
-          _buildSliverAppBar(),
-          SliverToBoxAdapter(child: _buildBody()),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        if (_hasChanges) {
+          await _saveChanges();
+        }
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: CustomScrollView(
+          slivers: [
+            _buildSliverAppBar(),
+            SliverToBoxAdapter(child: _buildBody()),
+          ],
+        ),
       ),
     );
   }
@@ -71,7 +83,12 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
           ),
           child: const Icon(Icons.arrow_back_rounded, size: 20),
         ),
-        onPressed: () => Navigator.pop(context),
+        onPressed: () async {
+          if (_hasChanges) {
+            await _saveChanges();
+          }
+          if (mounted) Navigator.pop(context);
+        },
       ),
       actions: [
         IconButton(
@@ -811,7 +828,10 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                     .read(bookListProvider.notifier)
                     .deleteBook(_book.id!);
               }
-              if (mounted) navigator.pop(); // Close detail screen
+              if (mounted) {
+                _hasChanges = false; // Prevent auto-save on pop
+                navigator.pop(); // Close detail screen
+              }
             },
             child: const Text(
               'Törlés',
