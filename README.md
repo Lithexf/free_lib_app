@@ -1,6 +1,7 @@
 # FreeLib
 
-A FreeLib egy Flutter-alapú mobilalkalmazás személyes könyvtár kezelésére. Könyveket ISBN-vonalkód beolvasásával vagy az ISBN kézi megadásával lehet felvenni. Az alkalmazás külső könyvadatbázisokból próbálja lekérni a könyv adatait és borítóját, majd a könyvtárat helyi SQLite-adatbázisban tárolja.
+Mivel https://www.libib.com/ fizetős lett, ezért csináltam egy Clone-t hozzá.
+A FreeLib egy Flutter-alapú mobilalkalmazás személyes könyvtár kezelésére. Könyveket ISBN-vonalkód beolvasásával vagy az ISBN kézi megadásával lehet felvenni. Az alkalmazás külső könyvadatbázisokból próbálja lekérni a könyv adatait és borítóját, majd a könyvtárat helyi SQLite-adatbázisban tárolja.  
 
 ## Funkciók
 
