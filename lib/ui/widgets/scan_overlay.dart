@@ -87,7 +87,7 @@ class _ScanOverlayState extends State<ScanOverlay>
               ),
             ),
             child: const Text(
-              'Align barcode within the frame',
+              'Igazítsd a vonalkódot a keretbe',
               style: TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 14,

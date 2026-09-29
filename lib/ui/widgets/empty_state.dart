@@ -11,8 +11,8 @@ class EmptyState extends StatelessWidget {
 
   const EmptyState({
     super.key,
-    this.title = 'Your library is empty',
-    this.subtitle = 'Scan a barcode to add your first book!',
+    this.title = 'A könyvtárad üres',
+    this.subtitle = 'Szkennelj be egy vonalkódot az első könyved hozzáadásához!',
     this.icon = Icons.library_books_outlined,
     this.actionLabel,
     this.onAction,

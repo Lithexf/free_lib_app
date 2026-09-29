@@ -93,7 +93,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
                         const Icon(Icons.error_outline, color: AppColors.error, size: 48),
                         const SizedBox(height: 16),
                         Text(
-                          'Scanner Error\n\n${error.errorDetails?.message ?? "Please ensure camera permissions are granted and Google Play Services is up to date."}',
+                          'Szkenner hiba\n\n${error.errorDetails?.message ?? "Kérjük, ellenőrizd a kamera engedélyeket és frissítsd a Google Play-szolgáltatásokat."}',
                           style: const TextStyle(color: Colors.white),
                           textAlign: TextAlign.center,
                         ),
@@ -138,7 +138,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
                       CircularProgressIndicator(color: AppColors.primary),
                       SizedBox(height: 16),
                       Text(
-                        'Looking up book...',
+                        'Könyv keresése...',
                         style: TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 16,
@@ -223,7 +223,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Or enter ISBN manually',
+                'Vagy add meg az ISBN-t manuálisan',
                 style: TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 13,
@@ -241,7 +241,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
                       ],
                       style: const TextStyle(color: AppColors.textPrimary),
                       decoration: InputDecoration(
-                        hintText: 'e.g. 978-0-14-028329-7',
+                        hintText: 'pl. 978-0-14-028329-7',
                         prefixIcon: const Icon(
                           Icons.keyboard_rounded,
                           color: AppColors.textMuted,
@@ -294,7 +294,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Scanner'),
+        title: const Text('Szkenner'),
         backgroundColor: AppColors.background,
       ),
       body: Center(
@@ -318,7 +318,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Camera Permission Required',
+                'Kamera engedély szükséges',
                 style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 20,
@@ -327,7 +327,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'FreeLib needs camera access to scan book barcodes. You can also enter ISBNs manually below.',
+                'A FreeLib-nek szüksége van a kamera hozzáférésre a vonalkódok szkenneléséhez. Az ISBN-t manuálisan is megadhatod alább.',
                 style: TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 14,
@@ -338,7 +338,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: () => openAppSettings(),
-                child: const Text('Open Settings'),
+                child: const Text('Beállítások megnyitása'),
               ),
               const SizedBox(height: 32),
               // Manual ISBN entry fallback
@@ -352,7 +352,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
                       keyboardType: TextInputType.number,
                       style: const TextStyle(color: AppColors.textPrimary),
                       decoration: const InputDecoration(
-                        hintText: 'Enter ISBN manually',
+                        hintText: 'ISBN megadása manuálisan',
                         prefixIcon:
                             Icon(Icons.keyboard_rounded, color: AppColors.textMuted),
                       ),
@@ -397,7 +397,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
     if (isbn == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Invalid ISBN. Please check and try again.'),
+          content: Text('Érvénytelen ISBN. Kérjük, ellenőrizd és próbáld újra.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -424,7 +424,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('"${existing.title}" is already in your library!'),
+              content: Text('A(z) "${existing.title}" már a könyvtáradban van!'),
               backgroundColor: AppColors.accent,
             ),
           );
@@ -448,7 +448,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Could not find book info for this ISBN.'),
+            content: Text('Nem található információ ehhez az ISBN-hez.'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -458,7 +458,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString()}'),
+            content: Text('Hiba: ${e.toString()}'),
             backgroundColor: AppColors.error,
           ),
         );

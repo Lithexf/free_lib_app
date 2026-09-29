@@ -4,12 +4,12 @@ import 'database_provider.dart';
 
 /// Sort options for the book library
 enum BookSortOrder {
-  dateAddedDesc('Recently Added'),
-  dateAddedAsc('Oldest First'),
-  titleAsc('Title A–Z'),
-  titleDesc('Title Z–A'),
-  ratingDesc('Highest Rated'),
-  ratingAsc('Lowest Rated');
+  dateAddedDesc('Legutóbb hozzáadott'),
+  dateAddedAsc('Legrégebbi elöl'),
+  titleAsc('Cím A–Z'),
+  titleDesc('Cím Z–A'),
+  ratingDesc('Legjobbra értékelt'),
+  ratingAsc('Legrosszabbra értékelt');
 
   const BookSortOrder(this.label);
   final String label;

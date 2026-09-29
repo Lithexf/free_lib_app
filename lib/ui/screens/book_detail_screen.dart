@@ -179,7 +179,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
         children: [
           Icon(Icons.menu_book_rounded, color: AppColors.textMuted, size: 40),
           SizedBox(height: 8),
-          Text('No Cover', style: TextStyle(color: AppColors.textMuted)),
+          Text('Nincs borító', style: TextStyle(color: AppColors.textMuted)),
         ],
       ),
     );
@@ -238,7 +238,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
           // Authors
           if (_book.authors != null)
             Text(
-              'by ${_book.authors}',
+              'Szerző: ${_book.authors}',
               style: const TextStyle(
                 color: AppColors.secondary,
                 fontSize: 16,
@@ -257,7 +257,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
 
           // ── Rating Section ──
           _buildSection(
-            'Ratings',
+            'Értékelések',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -281,7 +281,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                           ),
                           const SizedBox(width: 8),
                           const Text(
-                            'Your Rating',
+                            'Saját értékelés',
                             style: TextStyle(
                               color: AppColors.textPrimary,
                               fontSize: 14,
@@ -335,7 +335,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
 
           // ── Reading Status Section ──
           _buildSection(
-            'Reading Status',
+            'Olvasási állapot',
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -369,7 +369,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
 
           // ── Metadata Section ──
           _buildSection(
-            'Details',
+            'Részletek',
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -381,20 +381,20 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                 children: [
                   _buildMetaRow('ISBN', _book.isbn),
                   if (_book.publisher != null)
-                    _buildMetaRow('Publisher', _book.publisher!),
+                    _buildMetaRow('Kiadó', _book.publisher!),
                   if (_book.publishedDate != null)
-                    _buildMetaRow('Published', _book.publishedDate!),
+                    _buildMetaRow('Kiadva', _book.publishedDate!),
                   if (_book.pageCount != null)
-                    _buildMetaRow('Pages', '${_book.pageCount}'),
+                    _buildMetaRow('Oldalszám', '${_book.pageCount}'),
                   if (_book.categories != null)
-                    _buildMetaRow('Categories', _book.categories!),
-                  _buildMetaRow('Added',
+                    _buildMetaRow('Kategóriák', _book.categories!),
+                  _buildMetaRow('Hozzáadva',
                       DateFormat.yMMMd().format(_book.dateAdded)),
                   if (_book.dateStarted != null)
-                    _buildMetaRow('Started',
+                    _buildMetaRow('Elkezdve',
                         DateFormat.yMMMd().format(_book.dateStarted!)),
                   if (_book.dateFinished != null)
-                    _buildMetaRow('Finished',
+                    _buildMetaRow('Befejezve',
                         DateFormat.yMMMd().format(_book.dateFinished!)),
                 ],
               ),
@@ -404,7 +404,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
           // ── Description Section ──
           if (_book.description != null)
             _buildSection(
-              'Description',
+              'Leírás',
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -425,7 +425,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
 
           // ── Notes Section ──
           _buildSection(
-            'Your Notes',
+            'Jegyzetek',
             child: TextField(
               controller: _notesController,
               maxLines: 4,
@@ -434,7 +434,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                 fontSize: 14,
               ),
               decoration: const InputDecoration(
-                hintText: 'Add your thoughts about this book...',
+                hintText: 'Írd le a gondolataidat erről a könyvről...',
               ),
               onChanged: (_) => setState(() => _hasChanges = true),
             ),
@@ -452,7 +452,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                 disabledBackgroundColor: AppColors.surfaceLight,
               ),
               child: Text(
-                _book.id == null ? 'Add to Library' : 'Save Changes',
+                _book.id == null ? 'Hozzáadás a könyvtárhoz' : 'Változtatások mentése',
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
             ),
@@ -539,7 +539,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Community Rating',
+                      'Közösségi értékelés',
                       style: const TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 14,
@@ -666,10 +666,10 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                         Expanded(
                           child: Text(
                             _rating == extRating
-                                ? 'Your rating matches the community average!'
+                                ? 'Az értékelésed megegyezik a közösségi átlaggal!'
                                 : _rating > extRating
-                                    ? 'You rated this ${(_rating - extRating).toStringAsFixed(1)} higher than average'
-                                    : 'You rated this ${(extRating - _rating).toStringAsFixed(1)} lower than average',
+                                    ? 'Az értékelésed ${(_rating - extRating).toStringAsFixed(1)} értékkel magasabb az átlagnál'
+                                    : 'Az értékelésed ${(extRating - _rating).toStringAsFixed(1)} értékkel alacsonyabb az átlagnál',
                             style: const TextStyle(
                               color: AppColors.textSecondary,
                               fontSize: 12,
@@ -691,7 +691,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                 ),
                 const SizedBox(width: 8),
                 const Text(
-                  'Community Rating',
+                  'Közösségi értékelés',
                   style: TextStyle(
                     color: AppColors.textMuted,
                     fontSize: 14,
@@ -700,7 +700,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                 ),
                 const Spacer(),
                 const Text(
-                  'Not available',
+                  'Nem elérhető',
                   style: TextStyle(
                     color: AppColors.textMuted,
                     fontSize: 12,
@@ -713,11 +713,11 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
 
   String _formatRatingCount(int count) {
     if (count >= 1000000) {
-      return '${(count / 1000000).toStringAsFixed(1)}M ratings';
+      return '${(count / 1000000).toStringAsFixed(1)}M értékelés';
     } else if (count >= 1000) {
-      return '${(count / 1000).toStringAsFixed(1)}K ratings';
+      return '${(count / 1000).toStringAsFixed(1)}K értékelés';
     }
-    return '$count ratings';
+    return '$count értékelés';
   }
 
   void _onStatusChanged(ReadingStatus status) {
@@ -760,8 +760,8 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
         SnackBar(
           content: Text(
             updatedBook.id == null
-                ? '${updatedBook.title} added to library!'
-                : 'Changes saved!',
+                ? '${updatedBook.title} hozzáadva a könyvtárhoz!'
+                : 'Változtatások elmentve!',
           ),
           backgroundColor: AppColors.success,
         ),
@@ -779,7 +779,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
     if (_rating > 0) {
       text.writeln('⭐ ${_rating.toStringAsFixed(1)}/5.0');
     }
-    text.writeln('Status: ${_selectedStatus.label}');
+    text.writeln('Állapot: ${_selectedStatus.label}');
 
     SharePlus.instance.share(ShareParams(text: text.toString()));
   }
@@ -790,17 +790,17 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text(
-          'Delete Book',
+          'Könyv törlése',
           style: TextStyle(color: AppColors.textPrimary),
         ),
         content: Text(
-          'Remove "${_book.title}" from your library? This cannot be undone.',
+          'Törlöd a(z) "${_book.title}" című könyvet a könyvtáradból? Ez a művelet nem vonható vissza.',
           style: const TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Mégse'),
           ),
           TextButton(
             onPressed: () async {
@@ -814,7 +814,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
               if (mounted) navigator.pop(); // Close detail screen
             },
             child: const Text(
-              'Delete',
+              'Törlés',
               style: TextStyle(color: AppColors.error),
             ),
           ),

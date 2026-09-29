@@ -63,9 +63,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavItem(0, Icons.library_books_rounded, 'Library'),
-              _buildNavItem(1, Icons.qr_code_scanner_rounded, 'Scan'),
-              _buildNavItem(2, Icons.bar_chart_rounded, 'Stats'),
+              _buildNavItem(0, Icons.library_books_rounded, 'Könyvtár'),
+              _buildNavItem(1, Icons.qr_code_scanner_rounded, 'Szkennelés'),
+              _buildNavItem(2, Icons.bar_chart_rounded, 'Statisztika'),
             ],
           ),
         ),
@@ -206,7 +206,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   const SizedBox(height: 2),
                   const Text(
-                    'Books Owned',
+                    'Saját könyvek',
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 13,
@@ -225,14 +225,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   Icons.auto_stories,
                   AppColors.accent,
                   '${_getStatusCount('reading')}',
-                  'Reading',
+                  'Olvasom',
                 ),
                 const SizedBox(height: 4),
                 _buildMiniStat(
                   Icons.check_circle_outline,
                   AppColors.primary,
                   '${_getStatusCount('completed')}',
-                  'Done',
+                  'Befejezve',
                 ),
               ],
             ),
@@ -293,7 +293,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   const SizedBox(height: 2),
                   const Text(
-                    'Your personal library',
+                    'A te személyes könyvtárad',
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 14,
@@ -329,7 +329,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 autofocus: true,
                 style: const TextStyle(color: AppColors.textPrimary),
                 decoration: InputDecoration(
-                  hintText: 'Search by title or author...',
+                  hintText: 'Keresés cím vagy szerző alapján...',
                   prefixIcon: const Icon(Icons.search_rounded,
                       color: AppColors.textMuted),
                   suffixIcon: IconButton(
@@ -393,7 +393,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilterChip(
-              label: const Text('All'),
+              label: const Text('Összes'),
               selected: currentFilter == null,
               onSelected: (_) {
                 ref.read(statusFilterProvider.notifier).state = null;
@@ -466,14 +466,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             const Icon(Icons.error_outline, color: AppColors.error, size: 48),
             const SizedBox(height: 16),
             Text(
-              'Error loading books: $error',
+              'Hiba a könyvek betöltésekor: $error',
               style: const TextStyle(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () => ref.read(bookListProvider.notifier).refresh(),
-              child: const Text('Retry'),
+              child: const Text('Újra'),
             ),
           ],
         ),
@@ -481,7 +481,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       data: (books) {
         if (books.isEmpty) {
           return EmptyState(
-            actionLabel: 'Scan Your First Book',
+            actionLabel: 'Szkenneld be az első könyved',
             onAction: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const ScannerScreen()),
@@ -561,7 +561,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               const SizedBox(height: 16),
               const Text(
-                'Sort By',
+                'Rendezés',
                 style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 18,

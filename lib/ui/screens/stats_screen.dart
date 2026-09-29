@@ -24,7 +24,7 @@ class StatsScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Statistics',
+                    'Statisztika',
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 28,
@@ -33,7 +33,7 @@ class StatsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Your reading journey at a glance',
+                    'Az olvasási utazásod egy pillantásra',
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 14,
@@ -57,7 +57,7 @@ class StatsScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(40),
                 child: Center(
                   child: Text(
-                    'Error loading stats',
+                    'Hiba a statisztika betöltésekor',
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
                 ),
@@ -81,7 +81,7 @@ class StatsScreen extends ConsumerWidget {
                   size: 64, color: AppColors.textMuted),
               SizedBox(height: 16),
               Text(
-                'No stats yet',
+                'Még nincs statisztika',
                 style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 18,
@@ -90,7 +90,7 @@ class StatsScreen extends ConsumerWidget {
               ),
               SizedBox(height: 8),
               Text(
-                'Add some books to see your reading statistics!',
+                'Adj hozzá néhány könyvet, hogy lásd az olvasási statisztikáidat!',
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
@@ -131,7 +131,7 @@ class StatsScreen extends ConsumerWidget {
               child: _buildStatCard(
                 icon: Icons.library_books_rounded,
                 iconColor: AppColors.secondary,
-                label: 'Total Books',
+                label: 'Összes könyv',
                 value: '${stats.totalCount}',
               ),
             ),
@@ -140,7 +140,7 @@ class StatsScreen extends ConsumerWidget {
               child: _buildStatCard(
                 icon: Icons.star_rounded,
                 iconColor: AppColors.primary,
-                label: 'Avg Rating',
+                label: 'Átlag értékelés',
                 value: stats.averageRating > 0
                     ? stats.averageRating.toStringAsFixed(1)
                     : '—',
@@ -151,7 +151,7 @@ class StatsScreen extends ConsumerWidget {
               child: _buildStatCard(
                 icon: ReadingStatus.completed.icon,
                 iconColor: ReadingStatus.completed.color,
-                label: 'Read',
+                label: 'Olvasott',
                 value: '${stats.countByStatus['completed'] ?? 0}',
               ),
             ),
@@ -164,7 +164,7 @@ class StatsScreen extends ConsumerWidget {
               child: _buildStatCard(
                 icon: ReadingStatus.reading.icon,
                 iconColor: ReadingStatus.reading.color,
-                label: 'Reading',
+                label: 'Olvasom',
                 value: '${stats.countByStatus['reading'] ?? 0}',
               ),
             ),
@@ -173,7 +173,7 @@ class StatsScreen extends ConsumerWidget {
               child: _buildStatCard(
                 icon: ReadingStatus.planToRead.icon,
                 iconColor: ReadingStatus.planToRead.color,
-                label: 'Planned',
+                label: 'Tervezett',
                 value: '${stats.countByStatus['planToRead'] ?? 0}',
               ),
             ),
@@ -182,7 +182,7 @@ class StatsScreen extends ConsumerWidget {
               child: _buildStatCard(
                 icon: ReadingStatus.dropped.icon,
                 iconColor: ReadingStatus.dropped.color,
-                label: 'Dropped',
+                label: 'Abbahagyott',
                 value: '${stats.countByStatus['dropped'] ?? 0}',
               ),
             ),
@@ -256,7 +256,7 @@ class StatsScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'By Status',
+            'Állapot szerint',
             style: TextStyle(
               color: AppColors.textPrimary,
               fontSize: 16,
@@ -346,7 +346,7 @@ class StatsScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Books Added Over Time',
+            'Idővel hozzáadott könyvek',
             style: TextStyle(
               color: AppColors.textPrimary,
               fontSize: 16,
@@ -365,7 +365,7 @@ class StatsScreen extends ConsumerWidget {
                     getTooltipColor: (_) => AppColors.surfaceLight,
                     getTooltipItem: (group, groupIndex, rod, rodIndex) {
                       return BarTooltipItem(
-                        '${rod.toY.toInt()} books',
+                        '${rod.toY.toInt()} könyv',
                         const TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 12,

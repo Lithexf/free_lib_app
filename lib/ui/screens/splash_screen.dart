@@ -130,7 +130,7 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Your personal library',
+                        'A te személyes könyvtárad',
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 16,
