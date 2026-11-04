@@ -4,7 +4,14 @@
 ![Language](https://img.shields.io/badge/language-Dart-blue)
 ![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?logo=Flutter&logoColor=white)
 
+<<<<<<< HEAD
 ## Áttekintés
+=======
+# Infó 
+
+Mivel https://www.libib.com/ fizetős lett, ezért csináltam egy Clone-t hozzá.
+A FreeLib egy Flutter-alapú mobilalkalmazás személyes könyvtár kezelésére. Könyveket ISBN-vonalkód beolvasásával vagy az ISBN kézi megadásával lehet felvenni. Az alkalmazás külső könyvadatbázisokból próbálja lekérni a könyv adatait és borítóját, majd a könyvtárat helyi SQLite-adatbázisban tárolja.  
+>>>>>>> c9f5945ec4c626926f4e67e73f055e3f2379140a
 
 Mivel a [Libib](https://www.libib.com/) fizetős lett, a **FreeLib** egy ingyenes, adatvédelem-központú, offline is használható Flutter alkalmazás személyes könyvtár kezelésére. Könyveket, mangákat és képregényeket kamerás ISBN-vonalkód beolvasással, online cím/szerző kereséssel vagy teljesen manuális űrlapon lehet felvenni. Az alkalmazás többlépcsős stratégiával (Google Books, Open Library, Moly.hu, valamint automatikus japán–angol/romaji fordítóval) gyűjti be a könyv adatait és borítóját, majd helyi SQLite-adatbázisban tárolja.
 
