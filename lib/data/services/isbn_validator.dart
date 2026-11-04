@@ -1,12 +1,12 @@
-/// ISBN-10 and ISBN-13 validation and conversion utility.
+/// ISBN-10 és ISBN-13 ellenőrző és átalakító segédosztály.
 ///
-/// Validates checksum digits to ensure scanned barcodes are real ISBNs
-/// before making API calls. Also handles EAN-13 book barcodes and
-/// provides flexible normalization for damaged/partial scans.
+/// Ellenőrzi az ellenőrző számjegyet (checksum), hogy a beolvasott vonalkódok
+/// valódi ISBN számok legyenek az API hívások előtt. Kezeli az EAN-13 könyv-vonalkódokat
+/// és rugalmas normalizálást biztosít a kopott vagy sérült vonalkódokhoz is.
 class IsbnValidator {
   IsbnValidator._();
 
-  /// Returns true if the given string is a valid ISBN (10 or 13 digits).
+  /// Igazat ad vissza, ha a megadott karakterlánc érvényes ISBN (10 vagy 13 számjegyű).
   static bool isValid(String isbn) {
     final cleaned = isbn.replaceAll(RegExp(r'[^0-9Xx]'), '');
     if (cleaned.length == 10) return _isValidIsbn10(cleaned);
@@ -14,23 +14,23 @@ class IsbnValidator {
     return false;
   }
 
-  /// Returns true if the string looks like it could be a book barcode.
-  /// More lenient than [isValid] — accepts EAN-13 barcodes with 978/979
-  /// prefix even if checksum is damaged (common with worn barcodes).
+  /// Igazat ad vissza, ha a karakterlánc könyv-vonalkódnak tűnik.
+  /// Megengedőbb, mint az [isValid] — elfogadja a 978/979 előtagú EAN-13 kódokat
+  /// akkor is, ha az ellenőrző számjegy sérült (gyakori a kopott vonalkódoknál).
   static bool isLikelyBookBarcode(String code) {
     final cleaned = code.replaceAll(RegExp(r'[^0-9Xx]'), '');
 
-    // Standard ISBN-10 or ISBN-13 with valid checksum
+    // Szabványos ISBN-10 vagy ISBN-13 érvényes ellenőrző összeggel
     if (isValid(cleaned)) return true;
 
-    // EAN-13 starting with 978 or 979 (book barcode prefix)
-    // even if checksum is slightly off (damaged barcode)
+    // 978-cal vagy 979-cel kezdődő EAN-13 (könyv-vonalkód előtag),
+    // még ha az ellenőrző összeg kissé eltér is (sérült vonalkód)
     if (cleaned.length == 13 &&
         (cleaned.startsWith('978') || cleaned.startsWith('979'))) {
       return true;
     }
 
-    // 10-digit string that could be ISBN-10 (lenient)
+    // 10 jegyű karakterlánc, amely ISBN-10 lehet (megengedő ellenőrzés)
     if (cleaned.length == 10) {
       final body = cleaned.substring(0, 9);
       if (RegExp(r'^[0-9]+$').hasMatch(body)) return true;
@@ -39,18 +39,18 @@ class IsbnValidator {
     return false;
   }
 
-  /// Normalize an ISBN: strip hyphens/spaces, validate.
-  /// Returns null if invalid.
+  /// ISBN normalizálása: kötőjelek és szóközök eltávolítása, majd ellenőrzés.
+  /// Érvénytelen bemenet esetén `null` értéket ad vissza.
   ///
-  /// Uses lenient mode: accepts likely book barcodes even with
-  /// minor checksum errors from damaged/worn barcodes.
+  /// Megengedő módot használ: elfogadja a valószínű könyv-vonalkódokat kisebb
+  /// ellenőrzőösszeg-hibák esetén is (kopott/sérült vonalkódok).
   static String? normalize(String isbn) {
     final cleaned = isbn.replaceAll(RegExp(r'[^0-9Xx]'), '');
 
-    // Strict validation first
+    // Elsőként szigorú ellenőrzés
     if (isValid(cleaned)) return cleaned;
 
-    // Lenient: accept EAN-13 book barcodes (978/979) even with bad checksum
+    // Megengedő mód: 978/979-es EAN-13 könyv-vonalkódok elfogadása hibás ellenőrző összeggel is
     if (cleaned.length == 13 &&
         (cleaned.startsWith('978') || cleaned.startsWith('979'))) {
       return cleaned;
@@ -59,7 +59,7 @@ class IsbnValidator {
     return null;
   }
 
-  /// Convert ISBN-10 to ISBN-13.
+  /// ISBN-10 átalakítása ISBN-13 formátumra.
   static String? isbn10to13(String isbn10) {
     final cleaned = isbn10.replaceAll(RegExp(r'[^0-9Xx]'), '');
     if (cleaned.length != 10) return null;
@@ -74,14 +74,14 @@ class IsbnValidator {
     return '$base$checkDigit';
   }
 
-  /// Convert ISBN-13 to ISBN-10 (only works for 978-prefixed ISBNs).
-  /// Returns null for 979-prefixed ISBNs (no ISBN-10 equivalent).
+  /// ISBN-13 átalakítása ISBN-10 formátumra (csak 978-as előtagú ISBN-eknél működik).
+  /// 979-es előtagú ISBN esetén `null` értéket ad vissza (nincs ISBN-10 megfelelője).
   static String? isbn13to10(String isbn13) {
     final cleaned = isbn13.replaceAll(RegExp(r'[^0-9]'), '');
     if (cleaned.length != 13) return null;
-    if (!cleaned.startsWith('978')) return null; // 979 has no ISBN-10 form
+    if (!cleaned.startsWith('978')) return null; // A 979-es előtagnak nincs ISBN-10 alakja
 
-    final body = cleaned.substring(3, 12); // 9 digits after 978
+    final body = cleaned.substring(3, 12); // A 978 utáni 9 számjegy
     int sum = 0;
     for (int i = 0; i < 9; i++) {
       sum += int.parse(body[i]) * (10 - i);
@@ -91,8 +91,8 @@ class IsbnValidator {
     return '$body$checkChar';
   }
 
-  /// Get all format variants for an ISBN (ISBN-10, ISBN-13, or both).
-  /// Useful for maximizing API lookup coverage.
+  /// Egy ISBN összes formátumváltozatának (ISBN-10, ISBN-13 vagy mindkettő) lekérése.
+  /// Segít maximalizálni az API-keresések találati arányát.
   static List<String> getAllFormats(String isbn) {
     final cleaned = isbn.replaceAll(RegExp(r'[^0-9Xx]'), '');
     final formats = <String>{cleaned};
@@ -108,7 +108,7 @@ class IsbnValidator {
     return formats.toList();
   }
 
-  /// Validate ISBN-10 checksum.
+  /// ISBN-10 ellenőrző összeg vizsgálata.
   static bool _isValidIsbn10(String isbn) {
     int sum = 0;
     for (int i = 0; i < 9; i++) {
@@ -117,7 +117,7 @@ class IsbnValidator {
       sum += int.parse(c) * (10 - i);
     }
 
-    // Last character can be 'X' (representing 10)
+    // Az utolsó karakter lehet 'X' is (amely 10-et jelent)
     final lastChar = isbn[9].toUpperCase();
     if (lastChar == 'X') {
       sum += 10;
@@ -130,7 +130,7 @@ class IsbnValidator {
     return sum % 11 == 0;
   }
 
-  /// Validate ISBN-13 checksum.
+  /// ISBN-13 ellenőrző összeg vizsgálata.
   static bool _isValidIsbn13(String isbn) {
     int sum = 0;
     for (int i = 0; i < 12; i++) {

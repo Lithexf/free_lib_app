@@ -1,14 +1,17 @@
+import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/book.dart';
 import '../services/app_exceptions.dart';
 import '../services/isbn_validator.dart';
+import '../services/library_encryption_service.dart';
 
-/// SQLite database helper for the FreeLib app.
+/// SQLite adatbázis-kezelő segédosztály a FreeLib alkalmazáshoz.
 ///
-/// Uses sqflite to provide full CRUD, combined filtering/searching/sorting,
-/// reading goal persistence, and statistics queries with structured error handling.
+/// A felhasználó könyvtárát az alkalmazás zárt, elszigetelt belső tárhelyén tárolja
+/// 256 bites ChaCha20 mezőszintű titkosítással, így külső alkalmazások nem tudják
+/// elolvasni vagy gyorsítótárazni az adatokat.
 class AppDatabase {
   static AppDatabase? _instance;
   static Database? _database;
@@ -27,19 +30,55 @@ class AppDatabase {
 
   Future<Database> _initDatabase() async {
     try {
+      await LibraryEncryptionService.instance.init();
+
       final dir = await getApplicationDocumentsDirectory();
+      // .nomedia fájl létrehozása a privát könyvtárban, hogy más appok / média-olvasók ne indexeljék
+      final noMedia = File(p.join(dir.path, '.nomedia'));
+      if (!await noMedia.exists()) {
+        await noMedia.writeAsString('', flush: true);
+      }
+
       final path = p.join(dir.path, 'freelib.db');
-      return await openDatabase(
+      final db = await openDatabase(
         path,
         version: 4,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       );
+
+      // Ha voltak korábban beszkennelt, még titkosítatlan könyvek, automatikusan titkosítjuk őket helyben
+      await _encryptLegacyPlaintextRows(db);
+      return db;
     } catch (e) {
       throw StorageException(
-        'Nem sikerült megnyitni a helyi adatbázist.',
+        'Nem sikerült megnyitni a helyi titkosított adatbázist.',
         e,
       );
+    }
+  }
+
+  /// Automatikusan titkosítja a korábbi verziókból származó, még nyílt szövegű könyvsorokat,
+  /// így a már beszkennelt könyvek adatvesztés nélkül átkerülnek a titkosított formátumba.
+  Future<void> _encryptLegacyPlaintextRows(Database db) async {
+    try {
+      final rows = await db.query('books');
+      final crypto = LibraryEncryptionService.instance;
+      for (final row in rows) {
+        final title = row['title'] as String?;
+        if (title != null && !crypto.isEncryptedValue(title)) {
+          final id = row['id'];
+          final encryptedRow = crypto.encryptBookMap(row);
+          await db.update(
+            'books',
+            encryptedRow,
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+        }
+      }
+    } catch (_) {
+      // Nem blokkoljuk az indulást, ha a migráció részlegesen már megtörtént
     }
   }
 
@@ -80,7 +119,6 @@ class AppDatabase {
       )
     ''');
 
-    // Indexes for fast status filtering and search
     await db.execute('CREATE INDEX idx_books_status ON books (status)');
     await db.execute('CREATE INDEX idx_books_title ON books (title)');
     await db.execute('CREATE INDEX idx_books_isbn ON books (isbn)');
@@ -88,7 +126,6 @@ class AppDatabase {
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      // v2: Add external (community) rating columns
       await db.execute('ALTER TABLE books ADD COLUMN external_rating REAL');
       await db.execute(
           'ALTER TABLE books ADD COLUMN external_rating_count INTEGER');
@@ -96,13 +133,11 @@ class AppDatabase {
           'ALTER TABLE books ADD COLUMN external_rating_source TEXT');
     }
     if (oldVersion < 3) {
-      // v3: Add original Japanese title and author columns for translation/search
       await db.execute('ALTER TABLE books ADD COLUMN original_title TEXT');
       await db.execute('ALTER TABLE books ADD COLUMN romaji_title TEXT');
       await db.execute('ALTER TABLE books ADD COLUMN original_author TEXT');
     }
     if (oldVersion < 4) {
-      // v4: Add current_page for reading progress tracking + app_settings table
       await db.execute('ALTER TABLE books ADD COLUMN current_page INTEGER');
       await db.execute('''
         CREATE TABLE IF NOT EXISTS app_settings (
@@ -113,10 +148,14 @@ class AppDatabase {
     }
   }
 
-  // ── CRUD Operations ──
+  Book _decryptRow(Map<String, dynamic> row) {
+    final decrypted = LibraryEncryptionService.instance.decryptBookMap(row);
+    return Book.fromMap(decrypted);
+  }
 
-  /// Insert a new book safely without overwriting existing user data.
-  /// Returns the newly inserted row id.
+  // ── CRUD műveletek (Létrehozás, Olvasás, Frissítés, Törlés) ──
+
+  /// Új könyv beszúrása titkosított formában. Visszaadja az új sor azonosítóját.
   Future<int> insertBook(Book book) async {
     try {
       final existing = await getBookByIsbn(book.isbn);
@@ -128,9 +167,11 @@ class AppDatabase {
       }
 
       final db = await database;
+      final encryptedMap =
+          LibraryEncryptionService.instance.encryptBookMap(book.toMap());
       return await db.insert(
         'books',
-        book.toMap(),
+        encryptedMap,
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
     } on AppException {
@@ -140,16 +181,18 @@ class AppDatabase {
     }
   }
 
-  /// Update an existing book. Returns number of rows affected.
+  /// Meglévő könyv frissítése titkosított formában. Visszaadja az érintett sorok számát.
   Future<int> updateBook(Book book) async {
     if (book.id == null) {
       throw const StorageException('A frissítendő könyvnek nincs azonosítója.');
     }
     try {
       final db = await database;
+      final encryptedMap =
+          LibraryEncryptionService.instance.encryptBookMap(book.toMap());
       return await db.update(
         'books',
-        book.toMap(),
+        encryptedMap,
         where: 'id = ?',
         whereArgs: [book.id],
       );
@@ -158,7 +201,7 @@ class AppDatabase {
     }
   }
 
-  /// Delete a book by id. Returns number of rows affected.
+  /// Könyv törlése azonosító alapján. Visszaadja az érintett sorok számát.
   Future<int> deleteBook(int id) async {
     try {
       final db = await database;
@@ -172,7 +215,7 @@ class AppDatabase {
     }
   }
 
-  /// Get a single book by id.
+  /// Egyetlen könyv lekérése azonosító alapján.
   Future<Book?> getBook(int id) async {
     try {
       final db = await database;
@@ -182,13 +225,13 @@ class AppDatabase {
         whereArgs: [id],
       );
       if (maps.isEmpty) return null;
-      return Book.fromMap(maps.first);
+      return _decryptRow(maps.first);
     } catch (e) {
       throw StorageException('Nem sikerült lekérdezni a könyvet.', e);
     }
   }
 
-  /// Get a single book by ISBN (checking both ISBN-10 and ISBN-13 variants).
+  /// Egyetlen könyv lekérése ISBN alapján (ISBN-10 és ISBN-13 változatokat is ellenőrizve).
   Future<Book?> getBookByIsbn(String isbn) async {
     try {
       final db = await database;
@@ -204,15 +247,16 @@ class AppDatabase {
         whereArgs: variants,
       );
       if (maps.isEmpty) return null;
-      return Book.fromMap(maps.first);
+      return _decryptRow(maps.first);
     } catch (e) {
       throw StorageException('Nem sikerült ellenőrizni az ISBN-t.', e);
     }
   }
 
-  // ── Query Operations ──
+  // ── Lekérdezési műveletek ──
 
-  /// Unified query supporting combined search query, status filter, and sort order.
+  /// Egységes lekérdezés, amely támogatja a kombinált szöveges keresést, állapot-szűrést
+  /// és rendezést a memóriában visszafejtett könyveken, miközben a háttértáron minden titkosítva marad.
   Future<List<Book>> queryBooks({
     String? searchQuery,
     String? status,
@@ -220,44 +264,72 @@ class AppDatabase {
   }) async {
     try {
       final db = await database;
-      final whereClauses = <String>[];
-      final whereArgs = <Object?>[];
-
-      if (status != null && status.isNotEmpty) {
-        whereClauses.add('status = ?');
-        whereArgs.add(status);
-      }
-
-      final trimmedQuery = searchQuery?.trim() ?? '';
-      if (trimmedQuery.isNotEmpty) {
-        final pattern = '%$trimmedQuery%';
-        whereClauses.add(
-          '(title LIKE ? OR authors LIKE ? OR isbn LIKE ? OR publisher LIKE ? '
-          'OR categories LIKE ? OR original_title LIKE ? OR romaji_title LIKE ? OR original_author LIKE ?)',
-        );
-        whereArgs.addAll(List.filled(8, pattern));
-      }
-
       final maps = await db.query(
         'books',
-        where: whereClauses.isEmpty ? null : whereClauses.join(' AND '),
-        whereArgs: whereArgs.isEmpty ? null : whereArgs,
-        orderBy: orderBy,
+        where: (status != null && status.isNotEmpty) ? 'status = ?' : null,
+        whereArgs: (status != null && status.isNotEmpty) ? [status] : null,
       );
-      return maps.map((m) => Book.fromMap(m)).toList();
+
+      var books = maps.map(_decryptRow).toList();
+
+      final trimmedQuery = searchQuery?.trim().toLowerCase() ?? '';
+      if (trimmedQuery.isNotEmpty) {
+        books = books.where((b) {
+          return b.title.toLowerCase().contains(trimmedQuery) ||
+              (b.authors?.toLowerCase().contains(trimmedQuery) ?? false) ||
+              b.isbn.toLowerCase().contains(trimmedQuery) ||
+              (b.publisher?.toLowerCase().contains(trimmedQuery) ?? false) ||
+              (b.categories?.toLowerCase().contains(trimmedQuery) ?? false) ||
+              (b.originalTitle?.toLowerCase().contains(trimmedQuery) ??
+                  false) ||
+              (b.romajiTitle?.toLowerCase().contains(trimmedQuery) ?? false) ||
+              (b.originalAuthor?.toLowerCase().contains(trimmedQuery) ?? false);
+        }).toList();
+      }
+
+      _sortBooksInMemory(books, orderBy);
+      return books;
     } catch (e) {
       throw StorageException('Nem sikerült betölteni a könyvtárat.', e);
     }
   }
 
-  /// Get all books, ordered by date added (newest first).
+  void _sortBooksInMemory(List<Book> books, String orderBy) {
+    final normalized = orderBy.toLowerCase();
+    if (normalized.contains('date_added asc')) {
+      books.sort((a, b) => a.dateAdded.compareTo(b.dateAdded));
+    } else if (normalized.contains('title') && normalized.contains('desc')) {
+      books.sort(
+        (a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+      );
+    } else if (normalized.contains('title')) {
+      books.sort(
+        (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+      );
+    } else if (normalized.contains('rating') && normalized.contains('desc')) {
+      books.sort((a, b) {
+        final rA = (a.rating != null && a.rating! > 0) ? a.rating! : -1.0;
+        final rB = (b.rating != null && b.rating! > 0) ? b.rating! : -1.0;
+        return rB.compareTo(rA);
+      });
+    } else if (normalized.contains('rating') && normalized.contains('asc')) {
+      books.sort((a, b) {
+        final rA = (a.rating != null && a.rating! > 0) ? a.rating! : 999.0;
+        final rB = (b.rating != null && b.rating! > 0) ? b.rating! : 999.0;
+        return rA.compareTo(rB);
+      });
+    } else {
+      // Alapértelmezett rendezés: hozzáadás dátuma szerint csökkenő (date_added DESC)
+      books.sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
+    }
+  }
+
   Future<List<Book>> getAllBooks({
     String orderBy = 'date_added DESC',
   }) {
     return queryBooks(orderBy: orderBy);
   }
 
-  /// Get books filtered by reading status.
   Future<List<Book>> getBooksByStatus(
     String status, {
     String orderBy = 'date_added DESC',
@@ -265,12 +337,11 @@ class AppDatabase {
     return queryBooks(status: status, orderBy: orderBy);
   }
 
-  /// Search books by title, author, or ISBN (case-insensitive partial match).
   Future<List<Book>> searchBooks(String query) {
     return queryBooks(searchQuery: query, orderBy: 'title ASC');
   }
 
-  // ── Settings ──
+  // ── Alkalmazás-beállítások (szintén titkosítva a háttértáron) ──
 
   Future<String?> getSetting(String key) async {
     try {
@@ -281,7 +352,8 @@ class AppDatabase {
         whereArgs: [key],
       );
       if (rows.isEmpty) return null;
-      return rows.first['value'] as String?;
+      final rawVal = rows.first['value'] as String?;
+      return LibraryEncryptionService.instance.decryptField(rawVal);
     } catch (_) {
       return null;
     }
@@ -290,9 +362,11 @@ class AppDatabase {
   Future<void> setSetting(String key, String value) async {
     try {
       final db = await database;
+      final encryptedVal =
+          LibraryEncryptionService.instance.encryptField(value) ?? value;
       await db.insert(
         'app_settings',
-        {'key': key, 'value': value},
+        {'key': key, 'value': encryptedVal},
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } catch (e) {
@@ -300,16 +374,14 @@ class AppDatabase {
     }
   }
 
-  // ── Statistics ──
+  // ── Statisztikai lekérdezések ──
 
-  /// Get total count of books.
   Future<int> getTotalBookCount() async {
     final db = await database;
     final result = await db.rawQuery('SELECT COUNT(*) as count FROM books');
     return (result.first['count'] as num?)?.toInt() ?? 0;
   }
 
-  /// Get count of books grouped by status.
   Future<Map<String, int>> getBookCountByStatus() async {
     final db = await database;
     final result = await db.rawQuery(
@@ -322,7 +394,6 @@ class AppDatabase {
     return map;
   }
 
-  /// Get average rating across all rated books.
   Future<double> getAverageRating() async {
     final db = await database;
     final result = await db.rawQuery(
@@ -331,7 +402,6 @@ class AppDatabase {
     return (result.first['avg_rating'] as num?)?.toDouble() ?? 0.0;
   }
 
-  /// Get total pages read across completed books and in-progress books.
   Future<int> getTotalPagesRead() async {
     final db = await database;
     final result = await db.rawQuery('''
@@ -346,7 +416,6 @@ class AppDatabase {
     return (result.first['total_pages'] as num?)?.toInt() ?? 0;
   }
 
-  /// Get count of books finished in the current calendar year.
   Future<int> getBooksCompletedThisYear() async {
     final db = await database;
     final now = DateTime.now();
@@ -360,7 +429,6 @@ class AppDatabase {
     return (result.first['count'] as num?)?.toInt() ?? 0;
   }
 
-  /// Get count of books added per month (last 12 months).
   Future<List<Map<String, dynamic>>> getBooksAddedPerMonth() async {
     final db = await database;
     final twelveMonthsAgo = DateTime.now()
@@ -377,7 +445,6 @@ class AppDatabase {
     ''', [twelveMonthsAgo]);
   }
 
-  /// Close the database.
   Future<void> close() async {
     final db = await database;
     await db.close();

@@ -1,7 +1,7 @@
-/// Core Book model for the FreeLib application.
+/// A FreeLib alkalmazás központi könyv (Book) adatmodellje.
 ///
-/// Represents a single book in the user's library, including
-/// metadata fetched from APIs and user-specific data like ratings, progress, and status.
+/// Egyetlen könyvet reprezentál a felhasználó saját könyvtárában, beleértve
+/// az API-kból letöltött metaadatokat és a saját adatokat (értékelés, haladás, állapot).
 class Book {
   static const Object _unset = Object();
 
@@ -18,30 +18,30 @@ class Book {
   final String? categories;
   final String? coverUrl;
   final double? rating;
-  final String status; // ReadingStatus.name stored as string
+  final String status; // A ReadingStatus.name szöveges értéke
   final DateTime dateAdded;
   final DateTime? dateStarted;
   final DateTime? dateFinished;
   final String? notes;
 
-  // ── Original (Japanese) metadata ──
-  /// The original Japanese title (stored for searching)
+  // ── Eredeti (japán) metaadatok ──
+  /// Az eredeti japán cím (kereséshez eltárolva)
   final String? originalTitle;
 
-  /// The romanized (Romaji) title (stored for searching and display)
+  /// A latin betűsre átírt (Romaji) cím (kereséshez és megjelenítéshez)
   final String? romajiTitle;
 
-  /// The original Japanese author (stored for searching)
+  /// Az eredeti japán szerző neve (kereséshez eltárolva)
   final String? originalAuthor;
 
-  // ── External (community) rating data ──
-  /// Average rating from external source (Google Books / Open Library / Moly.hu), 1.0–5.0 scale
+  // ── Külső (közösségi) értékelési adatok ──
+  /// Átlagos értékelés külső forrásból (Google Books / Open Library / Moly.hu), 1.0–5.0 skálán
   final double? externalRating;
 
-  /// Number of ratings from the external source
+  /// Értékelések száma a külső forrásban
   final int? externalRatingCount;
 
-  /// Name of the external rating source (e.g. "Google Books", "Open Library", "Moly.hu")
+  /// A külső értékelés forrásának neve (pl. "Google Books", "Open Library", "Moly.hu")
   final String? externalRatingSource;
 
   const Book({
@@ -71,7 +71,7 @@ class Book {
     this.externalRatingSource,
   });
 
-  /// Returns reading progress between 0.0 and 1.0 if page count and current page are available.
+  /// Visszaadja az olvasási haladást 0.0 és 1.0 között, ha az oldalszám és az aktuális oldal meg van adva.
   double? get readingProgress {
     if (pageCount == null || pageCount! <= 0) return null;
     if (status == 'completed') return 1.0;
@@ -79,10 +79,10 @@ class Book {
     return (currentPage! / pageCount!).clamp(0.0, 1.0);
   }
 
-  /// True if the ISBN was generated locally for a manually added book without a barcode.
+  /// Igaz, ha az ISBN helyileg lett generálva egy vonalkód nélkül, kézzel felvett könyvhöz.
   bool get isManualIsbn => isbn.startsWith('LOCAL-');
 
-  /// Create a Book from a JSON map (database row or API response)
+  /// Könyv példány létrehozása kulcs-érték térképből (adatbázis sorból vagy API válaszból).
   factory Book.fromMap(Map<String, dynamic> map) {
     return Book(
       id: map['id'] as int?,
@@ -122,7 +122,7 @@ class Book {
     );
   }
 
-  /// Convert to a map for database insertion
+  /// Átalakítás kulcs-érték térképpé adatbázisba történő mentéshez.
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id,
@@ -152,8 +152,8 @@ class Book {
     };
   }
 
-  /// Create a copy with overridden fields.
-  /// Supports explicitly passing `null` to clear nullable fields.
+  /// Másolat készítése módosított mezőkkel.
+  /// Támogatja a `null` explicit átadását az opcionális mezők törléséhez.
   Book copyWith({
     int? id,
     String? isbn,

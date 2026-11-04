@@ -4,74 +4,72 @@ import '../models/book.dart';
 import 'app_exceptions.dart';
 import 'isbn_validator.dart';
 
-/// Service for fetching book metadata from external APIs.
+/// Könyv-metaadatok lekéréséért felelős szolgáltatás külső API-kból.
 ///
-/// Covers books, manga, comics, graphic novels, light novels, and
-/// international editions by using multiple databases and ISBN formats.
+/// Keresési folyamat (maximális sebességre optimalizálva):
 ///
-/// Lookup strategy (each tried in order until a result is found):
-/// 1. Google Books API — by ISBN-13 and ISBN-10
-/// 2. Open Library Books API — direct ISBN lookup
-/// 3. Open Library Search API — broader search (catches manga, comics, etc.)
-/// 4. Moly.hu Scraper — Hungarian/European editions
+/// 1. fázis — Gyors angol / nemzetközi JSON API-k (elsőként futnak):
+///   1. Google Books API (ISBN-13 előnyben részesítve, majd ISBN-10)
+///   2. Open Library Books API (ISBN-13 és ISBN-10 együtt, egyetlen kérésben)
+///   3. Open Library Search API (szélesebb nemzetközi / manga / képregény lefedettség)
+///
+/// 2. fázis — Lassú magyar HTML kereső tartalék (csak ha az 1. fázis nem adott találatot):
+///   4. Moly.hu HTML keresés (kizárólag végső tartalékként, mivel a Moly.hu-nak nincs nyilvános API-ja)
 class BookApiService {
   final Dio _dio;
 
-  // Google Books API key — set to null to use public quota
-  // Get one free at: https://console.cloud.google.com → Books API
+  // Google Books API kulcs — `null` érték esetén a nyilvános kvótát használja
   static const String? _googleBooksApiKey = null;
 
   BookApiService({Dio? dio})
       : _dio = dio ??
             Dio(BaseOptions(
-              connectTimeout: const Duration(seconds: 8),
-              receiveTimeout: const Duration(seconds: 8),
+              connectTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 5),
               headers: {
                 'User-Agent': 'FreeLib/1.0 (personal book library app)',
               },
             ));
 
-  /// Look up a book by ISBN. Tries all available databases and ISBN formats.
-  /// Returns a partially-filled Book object, or null if no database knows this ISBN.
+  /// Könyv keresése ISBN alapján:
+  /// 1) Először a gyors angol/nemzetközi JSON API-kban keres (Google Books, Open Library).
+  /// 2) Csak akkor tér át a magyar Moly.hu keresésre, ha egyik angol API sem adott találatot.
   ///
-  /// Throws [NetworkException] if all lookups fail due to network/connectivity issues.
-  ///
-  /// Supports: books, manga, comics, graphic novels, light novels,
-  /// translated editions, and any publication with a valid ISBN/EAN-13 barcode.
+  /// [NetworkException] kivételt dob, ha minden lekérdezés kapcsolódási hiba miatt hiúsul meg.
   Future<Book?> lookupByIsbn(String rawIsbn) async {
     final isbn = IsbnValidator.normalize(rawIsbn);
     if (isbn == null) return null;
 
-    // Get all ISBN format variants (ISBN-10 + ISBN-13) for broader coverage
-    final formats = IsbnValidator.getAllFormats(isbn);
-
+    // A 13 jegyű ISBN előresorolása, majd utána a 10 jegyű változat
+    final formats = _prioritizeIsbn13(IsbnValidator.getAllFormats(isbn));
     final tracker = _RequestHealthTracker();
 
-    // ── Strategy 1: Google Books (best metadata + ratings) ──
+    // ══════════════════════════════════════════════════════════════════
+    // 1. FÁZIS: Angol / nemzetközi JSON API-k (gyors lekérdezés)
+    // ══════════════════════════════════════════════════════════════════
+
+    // 1.1 Google Books API
     for (final format in formats) {
-      final result = await _lookupGoogleBooks(format, tracker);
-      if (result != null) return _applyTranslation(result);
-      // Fast-fail if completely offline (DNS/socket unreachable)
+      final googleBook = await _lookupGoogleBooks(format, tracker);
+      if (googleBook != null) return _applyTranslation(googleBook);
       if (tracker.isOffline) break;
     }
 
-    // ── Strategy 2: Open Library direct ISBN lookup ──
+    // 1.2 Open Library Direct ISBN API (egyetlen kérésben az összes ISBN formátum)
     if (!tracker.isOffline) {
-      for (final format in formats) {
-        final result = await _lookupOpenLibrary(format, tracker);
-        if (result != null) return _applyTranslation(result);
-        if (tracker.isOffline) break;
-      }
+      final openLibBook = await _lookupOpenLibraryBatch(formats, tracker);
+      if (openLibBook != null) return _applyTranslation(openLibBook);
     }
 
-    // ── Strategy 3: Open Library Search API (broadest coverage) ──
-    // Catches manga, comics, international editions that direct lookup misses
+    // 1.3 Open Library Search API (szélesebb angol/nemzetközi találatok)
     if (!tracker.isOffline) {
-      final searchResult = await _searchOpenLibrary(isbn, tracker);
+      final searchResult = await _searchOpenLibrary(formats.first, tracker);
       if (searchResult != null) return _applyTranslation(searchResult);
     }
 
-    // ── Strategy 4: Moly.hu Scraper (for Hungarian/European editions) ──
+    // ══════════════════════════════════════════════════════════════════
+    // 2. FÁZIS: Magyar tartalék (Moly.hu — csak ha az angol API-kban nincs)
+    // ══════════════════════════════════════════════════════════════════
     if (!tracker.isOffline) {
       final molyResult = await _lookupMoly(isbn, tracker);
       if (molyResult != null) return _applyTranslation(molyResult);
@@ -84,15 +82,22 @@ class BookApiService {
     return null;
   }
 
-  /// Search books online by title, author, or keyword.
+  /// Biztosítja, hogy a 13 jegyű ISBN-ek megelőzzék a 10 jegyűeket a gyorsabb találat érdekében.
+  List<String> _prioritizeIsbn13(List<String> formats) {
+    final sorted = List<String>.from(formats);
+    sorted.sort((a, b) => b.length.compareTo(a.length));
+    return sorted;
+  }
+
+  /// Könyvek online keresése cím, szerző vagy kulcsszó alapján.
   ///
-  /// Uses Google Books first, falling back to Open Library Search if needed.
-  /// Throws [NetworkException] if search fails due to missing internet connection.
+  /// Először a Google Books API-t használja, szükség esetén az Open Library Search API-ra tér át.
+  /// [NetworkException] kivételt dob, ha a keresés internetkapcsolat hiánya miatt meghiúsul.
   Future<List<Book>> searchBooksOnline(String query) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return [];
 
-    // If the user typed a valid ISBN into the online search box, also try exact ISBN lookup!
+    // Ha a felhasználó érvényes ISBN-t írt a keresőmezőbe, a gyors ISBN-lekérdezést futtatjuk
     final normalizedIsbn = IsbnValidator.normalize(trimmed);
     if (normalizedIsbn != null && IsbnValidator.isValid(normalizedIsbn)) {
       final exact = await lookupByIsbn(normalizedIsbn);
@@ -103,7 +108,7 @@ class BookApiService {
     final results = <Book>[];
     final seenIsbns = <String>{};
 
-    // 1. Google Books search
+    // 1. Google Books keresés (angol/nemzetközi API)
     try {
       final response = await _dio.get(
         'https://www.googleapis.com/books/v1/volumes',
@@ -130,12 +135,12 @@ class BookApiService {
     } on DioException catch (e) {
       tracker.recordDioError(e);
     } catch (e) {
-      debugPrint('Google Books search error: $e');
+      debugPrint('Google Books keresési hiba: $e');
     }
 
     if (results.isNotEmpty) return results;
 
-    // 2. Fallback to Open Library Search API
+    // 2. Tartalék: Open Library Search API
     if (!tracker.isOffline) {
       try {
         final response = await _dio.get(
@@ -163,7 +168,7 @@ class BookApiService {
       } on DioException catch (e) {
         tracker.recordDioError(e);
       } catch (e) {
-        debugPrint('Open Library search error: $e');
+        debugPrint('Open Library keresési hiba: $e');
       }
     }
 
@@ -206,7 +211,7 @@ class BookApiService {
       tracker.recordDioError(e);
       return null;
     } catch (e) {
-      debugPrint('Google Books lookup error: $e');
+      debugPrint('Google Books lekérdezési hiba: $e');
       return null;
     }
   }
@@ -218,7 +223,7 @@ class BookApiService {
     final volumeInfo = item['volumeInfo'] as Map<String, dynamic>?;
     if (volumeInfo == null) return null;
 
-    // Extract ISBN-13 (preferred) or ISBN-10
+    // ISBN-13 (előnyben részesített) vagy ISBN-10 kinyerése
     String? resolvedIsbn = explicitIsbn;
     if (resolvedIsbn == null) {
       final identifiers = volumeInfo['industryIdentifiers'] as List<dynamic>?;
@@ -240,16 +245,14 @@ class BookApiService {
       resolvedIsbn = isbn13 ?? isbn10;
     }
 
-    // Fallback local ID if edition has no ISBN in Google Books
     final volumeId = item['id'] as String?;
     resolvedIsbn ??=
         'LOCAL-GB-${volumeId ?? DateTime.now().millisecondsSinceEpoch}';
 
-    // Extract cover URL (prefer larger image)
+    // Borítókép URL kinyerése (nagyobb felbontás előnyben részesítve)
     String? coverUrl;
     final imageLinks = volumeInfo['imageLinks'] as Map<String, dynamic>?;
     if (imageLinks != null) {
-      // Prefer larger sizes: extraLarge > large > medium > thumbnail > smallThumbnail
       coverUrl = (imageLinks['extraLarge'] as String?) ??
           (imageLinks['large'] as String?) ??
           (imageLinks['medium'] as String?) ??
@@ -258,7 +261,6 @@ class BookApiService {
       coverUrl = coverUrl?.replaceAll('http://', 'https://');
     }
 
-    // If no Google cover and we have a real ISBN, use Open Library cover
     if (coverUrl == null && !resolvedIsbn.startsWith('LOCAL-')) {
       coverUrl = _buildOpenLibraryCoverUrl(resolvedIsbn);
     }
@@ -266,7 +268,6 @@ class BookApiService {
     final authors = volumeInfo['authors'] as List<dynamic>?;
     final categories = volumeInfo['categories'] as List<dynamic>?;
 
-    // Extract community rating from Google Books
     final avgRating = (volumeInfo['averageRating'] as num?)?.toDouble();
     final ratingsCount = (volumeInfo['ratingsCount'] as num?)?.toInt();
 
@@ -288,119 +289,19 @@ class BookApiService {
     );
   }
 
-  // ── Moly.hu (Hungarian database scraper) ──
+  // ── Open Library Books API (kötegelt ISBN-13 + ISBN-10 lekérdezés 1 kérésben) ──
 
-  Future<Book?> _lookupMoly(
-    String isbn,
+  Future<Book?> _lookupOpenLibraryBatch(
+    List<String> formats,
     _RequestHealthTracker tracker,
   ) async {
+    if (formats.isEmpty) return null;
     try {
-      final response = await _dio.get(
-        'https://moly.hu/kereses',
-        queryParameters: {'q': isbn},
-        options: Options(
-          followRedirects: true,
-          validateStatus: (status) => (status ?? 500) < 500,
-          headers: {
-            'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept':
-                'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'hu-HU,hu;q=0.9,en-US;q=0.8,en;q=0.7',
-          },
-        ),
-      );
-      tracker.recordSuccess();
-
-      final rawData = response.data;
-      if (rawData is! String) return null;
-      final html = rawData;
-
-      if (html.contains('Nincs találat') || html.contains('Nem található')) {
-        return null;
-      }
-
-      // Parse title and author from <title> tag
-      // Format usually: "Author: Title · Moly" or "Title · Moly"
-      final titleMatch =
-          RegExp(r'<title>(.*?) · Moly<\/title>').firstMatch(html);
-      if (titleMatch == null) return null;
-
-      final pageTitle = _decodeHtmlEntities(titleMatch.group(1) ?? '');
-      // Guard against generic search page title ("Keresés · Moly")
-      if (pageTitle.trim().isEmpty || pageTitle.startsWith('Keresés')) {
-        return null;
-      }
-
-      String author = '';
-      String title = pageTitle;
-
-      if (pageTitle.contains(': ')) {
-        final parts = pageTitle.split(': ');
-        author = parts.first.trim();
-        title = parts.sublist(1).join(': ').trim();
-      }
-
-      // Parse cover URL
-      final coverMatch = RegExp(
-              r'(https:\/\/moly\.hu\/system\/covers\/big\/.*?\.jpg)')
-          .firstMatch(html);
-      final String? coverUrl = coverMatch?.group(1);
-
-      // Parse community rating if available (Moly uses percentages, e.g. 93%)
-      double? externalRating;
-      final ratingMatch = RegExp(r'(\d+)%<\/span>').firstMatch(html);
-      if (ratingMatch != null) {
-        final percentage = double.tryParse(ratingMatch.group(1) ?? '0');
-        if (percentage != null && percentage > 0) {
-          // Convert percentage (0-100) to 5-star scale
-          externalRating = (percentage / 20).clamp(0.0, 5.0);
-        }
-      }
-
-      return Book(
-        isbn: isbn,
-        title: title.isEmpty ? 'Ismeretlen cím' : title,
-        authors: author.isEmpty ? null : author,
-        coverUrl: coverUrl,
-        dateAdded: DateTime.now(),
-        externalRating: externalRating,
-        externalRatingSource: externalRating != null ? 'Moly.hu' : null,
-      );
-    } on DioException catch (e) {
-      tracker.recordDioError(e);
-      return null;
-    } catch (e) {
-      debugPrint('Moly lookup error: $e');
-      return null;
-    }
-  }
-
-  String _decodeHtmlEntities(String input) {
-    return input
-        .replaceAll('&amp;', '&')
-        .replaceAll('&quot;', '"')
-        .replaceAll('&#39;', "'")
-        .replaceAll('&#039;', "'")
-        .replaceAll('&apos;', "'")
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&ndash;', '–')
-        .replaceAll('&mdash;', '—')
-        .replaceAll('&nbsp;', ' ');
-  }
-
-  // ── Open Library Books API (direct ISBN lookup) ──
-
-  Future<Book?> _lookupOpenLibrary(
-    String isbn,
-    _RequestHealthTracker tracker,
-  ) async {
-    try {
+      final bibkeys = formats.map((f) => 'ISBN:$f').join(',');
       final response = await _dio.get(
         'https://openlibrary.org/api/books',
         queryParameters: {
-          'bibkeys': 'ISBN:$isbn',
+          'bibkeys': bibkeys,
           'jscmd': 'details',
           'format': 'json',
         },
@@ -408,26 +309,29 @@ class BookApiService {
       tracker.recordSuccess();
 
       final data = response.data;
-      if (data is! Map<String, dynamic>) return null;
-      final key = 'ISBN:$isbn';
+      if (data is! Map<String, dynamic> || data.isEmpty) return null;
 
-      if (!data.containsKey(key)) return null;
+      for (final isbn in formats) {
+        final key = 'ISBN:$isbn';
+        if (!data.containsKey(key)) continue;
+        final entry = data[key];
+        if (entry is! Map<String, dynamic>) continue;
+        final details = entry['details'] as Map<String, dynamic>?;
+        if (details == null) continue;
 
-      final entry = data[key] as Map<String, dynamic>;
-      final details = entry['details'] as Map<String, dynamic>?;
-      if (details == null) return null;
-
-      return await _parseOpenLibraryDetails(isbn, entry, details);
+        return await _parseOpenLibraryDetails(isbn, entry, details);
+      }
+      return null;
     } on DioException catch (e) {
       tracker.recordDioError(e);
       return null;
     } catch (e) {
-      debugPrint('Open Library direct lookup error: $e');
+      debugPrint('Open Library kötegelt lekérdezési hiba: $e');
       return null;
     }
   }
 
-  // ── Open Library Search API (broader coverage for manga, comics, etc.) ──
+  // ── Open Library Search API (szélesebb lefedettség mangákhoz, képregényekhez stb.) ──
 
   Future<Book?> _searchOpenLibrary(
     String isbn,
@@ -461,9 +365,132 @@ class BookApiService {
       tracker.recordDioError(e);
       return null;
     } catch (e) {
-      debugPrint('Open Library search by ISBN error: $e');
+      debugPrint('Open Library ISBN keresési hiba: $e');
       return null;
     }
+  }
+
+  // ── Moly.hu (magyar adatbázis tartalék HTML feldolgozó — VÉGSŐ tartalék) ──
+
+  Future<Book?> _lookupMoly(
+    String isbn,
+    _RequestHealthTracker tracker,
+  ) async {
+    try {
+      final response = await _dio.get(
+        'https://moly.hu/kereses',
+        queryParameters: {'q': isbn},
+        options: Options(
+          followRedirects: true,
+          sendTimeout: const Duration(seconds: 6),
+          receiveTimeout: const Duration(seconds: 6),
+          validateStatus: (status) => (status ?? 500) < 500,
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept':
+                'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'hu-HU,hu;q=0.9,en-US;q=0.8,en;q=0.7',
+          },
+        ),
+      );
+      tracker.recordSuccess();
+
+      final rawData = response.data;
+      if (rawData is! String) return null;
+      var html = rawData;
+
+      if (html.contains('Nincs találat') || html.contains('Nem található')) {
+        return null;
+      }
+
+      // Cím és szerző kinyerése a <title> elemből
+      // Formátum közvetlen könyvoldalon: "Szerző: Cím · Moly" vagy "Cím · Moly"
+      var titleMatch =
+          RegExp(r'<title>(.*?) · Moly<\/title>').firstMatch(html);
+      if (titleMatch == null) return null;
+
+      var pageTitle = _decodeHtmlEntities(titleMatch.group(1) ?? '').trim();
+
+      // Ha a Moly találati listát ("Keresés") adott vissza átirányítás helyett,
+      // követjük az első /konyvek/... hivatkozást, ha van ilyen.
+      if (pageTitle.isEmpty || pageTitle.startsWith('Keresés')) {
+        final bookLinkMatch =
+            RegExp(r'href="(\/konyvek\/[^"#?]+)"').firstMatch(html);
+        if (bookLinkMatch == null) return null;
+
+        final bookPath = bookLinkMatch.group(1)!;
+        final bookPageResp = await _dio.get(
+          'https://moly.hu$bookPath',
+          options: Options(
+            sendTimeout: const Duration(seconds: 5),
+            receiveTimeout: const Duration(seconds: 5),
+            validateStatus: (status) => (status ?? 500) < 500,
+          ),
+        );
+        if (bookPageResp.data is! String) return null;
+        html = bookPageResp.data as String;
+        titleMatch = RegExp(r'<title>(.*?) · Moly<\/title>').firstMatch(html);
+        if (titleMatch == null) return null;
+        pageTitle = _decodeHtmlEntities(titleMatch.group(1) ?? '').trim();
+        if (pageTitle.isEmpty || pageTitle.startsWith('Keresés')) return null;
+      }
+
+      String author = '';
+      String title = pageTitle;
+
+      if (pageTitle.contains(': ')) {
+        final parts = pageTitle.split(': ');
+        author = parts.first.trim();
+        title = parts.sublist(1).join(': ').trim();
+      }
+
+      // Borítókép URL kinyerése
+      final coverMatch = RegExp(
+              r'(https:\/\/moly\.hu\/system\/covers\/big\/.*?\.jpg)')
+          .firstMatch(html);
+      final String? coverUrl = coverMatch?.group(1);
+
+      // Közösségi értékelés kinyerése, ha elérhető (a Moly százalékot használ, pl. 93%)
+      double? externalRating;
+      final ratingMatch = RegExp(r'(\d+)%<\/span>').firstMatch(html);
+      if (ratingMatch != null) {
+        final percentage = double.tryParse(ratingMatch.group(1) ?? '0');
+        if (percentage != null && percentage > 0) {
+          externalRating = (percentage / 20).clamp(0.0, 5.0);
+        }
+      }
+
+      return Book(
+        isbn: isbn,
+        title: title.isEmpty ? 'Ismeretlen cím' : title,
+        authors: author.isEmpty ? null : author,
+        coverUrl: coverUrl,
+        dateAdded: DateTime.now(),
+        externalRating: externalRating,
+        externalRatingSource: externalRating != null ? 'Moly.hu' : null,
+      );
+    } on DioException catch (e) {
+      tracker.recordDioError(e);
+      return null;
+    } catch (e) {
+      debugPrint('Moly lekérdezési hiba: $e');
+      return null;
+    }
+  }
+
+  String _decodeHtmlEntities(String input) {
+    return input
+        .replaceAll('&amp;', '&')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&#039;', "'")
+        .replaceAll('&apos;', "'")
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&ndash;', '–')
+        .replaceAll('&mdash;', '—')
+        .replaceAll('&nbsp;', ' ');
   }
 
   Book? _parseOpenLibrarySearchDoc(
@@ -474,7 +501,6 @@ class BookApiService {
     if (resolvedIsbn == null) {
       final isbns = doc['isbn'] as List<dynamic>?;
       if (isbns != null && isbns.isNotEmpty) {
-        // Prefer 13-digit ISBN if present
         for (final candidate in isbns) {
           final norm = IsbnValidator.normalize(candidate.toString());
           if (norm != null && norm.length == 13) {
@@ -489,7 +515,6 @@ class BookApiService {
         '${DateTime.now().millisecondsSinceEpoch}';
     resolvedIsbn ??= 'LOCAL-OL-$key';
 
-    // Build cover URL from cover ID
     final coverId = (doc['cover_i'] as num?)?.toInt();
     String? coverUrl;
     if (coverId != null) {
@@ -498,21 +523,17 @@ class BookApiService {
       coverUrl = _buildOpenLibraryCoverUrl(resolvedIsbn);
     }
 
-    // Authors
     final authorNames = doc['author_name'] as List<dynamic>?;
     final authors = authorNames?.map((a) => a.toString()).join(', ');
 
-    // Publisher
     final publishers = doc['publisher'] as List<dynamic>?;
     final publisher = publishers != null && publishers.isNotEmpty
         ? publishers.first.toString()
         : null;
 
-    // Categories / Subjects
     final subjects = doc['subject'] as List<dynamic>?;
     final categories = subjects?.take(5).map((s) => s.toString()).join(', ');
 
-    // Community rating from Open Library search
     final avgRating = (doc['ratings_average'] as num?)?.toDouble();
     final ratingsCount = (doc['ratings_count'] as num?)?.toInt();
 
@@ -539,21 +560,19 @@ class BookApiService {
     );
   }
 
-  // ── Shared Open Library parsing ──
+  // ── Közös Open Library adatfeldolgozás ──
 
   Future<Book?> _parseOpenLibraryDetails(
     String isbn,
     Map<String, dynamic> entry,
     Map<String, dynamic> details,
   ) async {
-    // Extract authors
     final authorsList = details['authors'] as List<dynamic>?;
     final authors = authorsList
         ?.map((a) => (a as Map<String, dynamic>)['name'] as String?)
         .whereType<String>()
         .join(', ');
 
-    // Extract publishers (may be strings or objects with 'name' key)
     final publishers = details['publishers'] as List<dynamic>?;
     String? publisher;
     if (publishers != null && publishers.isNotEmpty) {
@@ -565,17 +584,14 @@ class BookApiService {
       }
     }
 
-    // Cover URL — try thumbnail from response, otherwise construct directly
     String? coverUrl = entry['thumbnail_url'] as String?;
     if (coverUrl != null) {
       coverUrl = coverUrl.replaceAll('-S.jpg', '-L.jpg');
     }
     coverUrl ??= _buildOpenLibraryCoverUrl(isbn);
 
-    // Page count
     final pageCount = (details['number_of_pages'] as num?)?.toInt();
 
-    // Description (can be String or {'value': String})
     String? description;
     final rawDesc = details['description'];
     if (rawDesc is String) {
@@ -584,7 +600,6 @@ class BookApiService {
       description = rawDesc['value'] as String?;
     }
 
-    // Subjects as categories
     final subjects = details['subjects'] as List<dynamic>?;
     final categories = subjects
         ?.take(5)
@@ -596,7 +611,6 @@ class BookApiService {
         .whereType<String>()
         .join(', ');
 
-    // Try to fetch Open Library community ratings via the works key
     double? externalRating;
     int? externalRatingCount;
     String? externalRatingSource;
@@ -629,7 +643,6 @@ class BookApiService {
     );
   }
 
-  /// Extract the Open Library works key from book details.
   String? _extractWorksKey(Map<String, dynamic> details) {
     try {
       final works = details['works'] as List<dynamic>?;
@@ -642,11 +655,15 @@ class BookApiService {
     }
   }
 
-  /// Fetch community ratings from Open Library's ratings API.
+  /// Közösségi értékelések lekérése az Open Library értékelési API-jából (rövid, 2 mp-es időkorláttal).
   Future<(double, int)?> _fetchOpenLibraryRatings(String worksKey) async {
     try {
       final response = await _dio.get(
         'https://openlibrary.org$worksKey/ratings.json',
+        options: Options(
+          sendTimeout: const Duration(seconds: 2),
+          receiveTimeout: const Duration(seconds: 2),
+        ),
       );
 
       final data = response.data as Map<String, dynamic>;
@@ -663,12 +680,10 @@ class BookApiService {
     }
   }
 
-  /// Build a direct Open Library cover URL from ISBN.
   String _buildOpenLibraryCoverUrl(String isbn) {
     return 'https://covers.openlibrary.org/b/isbn/$isbn-L.jpg';
   }
 
-  /// Check if a cover URL actually returns an image (not a 1x1 placeholder).
   Future<bool> isCoverAvailable(String url) async {
     try {
       final response = await _dio.head(url);
@@ -680,9 +695,8 @@ class BookApiService {
     }
   }
 
-  // ── Translation & Romanization ──
+  // ── Fordítás és latin betűs átírás (Romanizáció) ──
 
-  /// Automatically translates and romanizes Japanese titles and authors.
   Future<Book> _applyTranslation(Book book) async {
     String? originalTitle;
     String? romajiTitle;
@@ -691,18 +705,14 @@ class BookApiService {
     String? originalAuthor;
     String? newAuthor = book.authors;
 
-    // Process Title
     if (_isJapanese(book.title)) {
       originalTitle = book.title;
-      // 1. Try Open Library for official English title
       final officialTitle = await _fetchOfficialTitle(book.title);
       if (officialTitle != null) {
         newTitle = officialTitle.toTitleCase();
-        // Fallback romaji to title case google translate if possible
         final trans = await _translateJapaneseText(book.title);
         if (trans != null) romajiTitle = trans.$2?.toTitleCase();
       } else {
-        // 2. Fallback to Google Translate
         final trans = await _translateJapaneseText(book.title);
         if (trans != null) {
           if (trans.$1 != null) {
@@ -715,15 +725,12 @@ class BookApiService {
       }
     }
 
-    // Process Author
     if (book.authors != null && _isJapanese(book.authors!)) {
       originalAuthor = book.authors;
-      // 1. Try Open Library for official Author name
       final officialAuthor = await _fetchOfficialAuthorName(book.authors!);
       if (officialAuthor != null) {
         newAuthor = officialAuthor.toTitleCase();
       } else {
-        // 2. Fallback to Google Translate
         final trans = await _translateJapaneseText(book.authors!);
         if (trans != null) {
           newAuthor = (trans.$2 ?? trans.$1 ?? book.authors!).toTitleCase();
@@ -743,15 +750,12 @@ class BookApiService {
     return book;
   }
 
-  /// Checks if a string contains Japanese Kanji, Hiragana, or Katakana.
   bool _isJapanese(String text) {
     return RegExp(
             r'[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]')
         .hasMatch(text);
   }
 
-  /// Fetches translation and romaji using Google Translate's free web endpoint.
-  /// Returns (English Translation, Romaji String) or null if failed.
   Future<(String?, String?)?> _translateJapaneseText(String text) async {
     try {
       final response = await _dio.get(
@@ -774,13 +778,11 @@ class BookApiService {
       String? englishText;
       String? romajiText;
 
-      // Extract English translation (first item in the first inner list usually)
       final firstSection = sections.first as List<dynamic>?;
       if (firstSection != null && firstSection.isNotEmpty) {
         englishText = firstSection[0] as String?;
       }
 
-      // Extract Romaji (often the last item in the sections list has the transliteration)
       final lastSection = sections.last as List<dynamic>?;
       if (lastSection != null && lastSection.length > 3) {
         romajiText = lastSection[3] as String?;
@@ -792,7 +794,6 @@ class BookApiService {
     }
   }
 
-  /// Searches Open Library for an author and looks for an English/Romaji alternate name.
   Future<String?> _fetchOfficialAuthorName(String japaneseName) async {
     try {
       final response = await _dio.get(
@@ -806,7 +807,6 @@ class BookApiService {
       final alternates = doc['alternate_names'] as List<dynamic>?;
       if (alternates == null) return null;
 
-      // Find an alternate name that contains only ASCII characters (English/Romaji)
       for (final alt in alternates) {
         final name = alt.toString();
         if (!_isJapanese(name) && RegExp(r'^[a-zA-Z\s\.\-]+$').hasMatch(name)) {
@@ -819,7 +819,6 @@ class BookApiService {
     }
   }
 
-  /// Searches Open Library for a title and looks for an English alternate title.
   Future<String?> _fetchOfficialTitle(String japaneseTitle) async {
     try {
       final response = await _dio.get(
@@ -831,7 +830,6 @@ class BookApiService {
 
       final doc = data['docs'][0];
 
-      // Check alternate titles
       final alternates = doc['alternative_title'] as List<dynamic>?;
       if (alternates != null) {
         for (final alt in alternates) {
@@ -843,7 +841,6 @@ class BookApiService {
         }
       }
 
-      // If the main title of the best match is English, use that
       final mainTitle = doc['title']?.toString();
       if (mainTitle != null &&
           !_isJapanese(mainTitle) &&
@@ -858,7 +855,6 @@ class BookApiService {
   }
 }
 
-/// Internal helper tracking connectivity vs. empty HTTP responses across fallback strategies.
 class _RequestHealthTracker {
   bool hadSuccessResponse = false;
   bool hadNetworkFailure = false;
@@ -884,7 +880,6 @@ class _RequestHealthTracker {
 }
 
 extension StringCasingExtension on String {
-  /// Converts a string to Title Case (e.g. "three days of happiness" -> "Three Days of Happiness")
   String toTitleCase() {
     if (trim().isEmpty) return this;
     final exceptions = {
@@ -911,7 +906,6 @@ extension StringCasingExtension on String {
         .map((index, word) {
           if (word.isEmpty) return MapEntry(index, '');
           final lowerWord = word.toLowerCase();
-          // Capitalize first/last word, or if it's not in exceptions
           if (index == 0 ||
               index == words.length - 1 ||
               !exceptions.contains(lowerWord)) {

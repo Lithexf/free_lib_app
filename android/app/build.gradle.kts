@@ -1,6 +1,6 @@
 plugins {
     id("com.android.application")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    // A Flutter Gradle beépülő modult az Android és Kotlin modulok után kell alkalmazni.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -15,25 +15,23 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // Egyedi alkalmazás-azonosító (Application ID)
         applicationId = "com.freelib.free_lib_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // SDK verziók a Flutter konfiguráció alapján
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
-        // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
-        // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
-        // flag during build.
+        // A pubspec.yaml-ben megadott verziókód és verziónév használata
         versionCode = flutter.versionCode
         versionName = "${flutter.versionName} (by @Lithexf | Dart/Flutter | 4832 lines)"
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // Aláírás debug kulccsal, hogy a kiadási (release) APK közvetlenül telepíthető legyen
+            // és az APK fájl metaadatai/ikonja érvényes aláírással jelenjenek meg.
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -50,6 +48,6 @@ flutter {
 }
 
 dependencies {
-    // Bundle the ML Kit barcode model directly into the APK for instant, offline scanning
+    // Az ML Kit vonalkód-modell közvetlen beépítése az APK-ba az azonnali, offline működéshez
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
 }

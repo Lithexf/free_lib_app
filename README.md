@@ -4,45 +4,62 @@
 ![Language](https://img.shields.io/badge/language-Dart-blue)
 ![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?logo=Flutter&logoColor=white)
 
-<<<<<<< HEAD
 ## Áttekintés
-=======
-# Infó 
 
-Mivel https://www.libib.com/ fizetős lett, ezért csináltam egy Clone-t hozzá.
-A FreeLib egy Flutter-alapú mobilalkalmazás személyes könyvtár kezelésére. Könyveket ISBN-vonalkód beolvasásával vagy az ISBN kézi megadásával lehet felvenni. Az alkalmazás külső könyvadatbázisokból próbálja lekérni a könyv adatait és borítóját, majd a könyvtárat helyi SQLite-adatbázisban tárolja.  
->>>>>>> c9f5945ec4c626926f4e67e73f055e3f2379140a
+Mivel a [Libib](https://www.libib.com/) fizetős lett, a **FreeLib** egy ingyenes, adatvédelem-központú, offline is használható Flutter alkalmazás személyes könyvtár kezelésére. Könyveket, mangákat és képregényeket kamerás ISBN-vonalkód beolvasással, online cím/szerző kereséssel vagy manuális űrlapon lehet felvenni.
 
-Mivel a [Libib](https://www.libib.com/) fizetős lett, a **FreeLib** egy ingyenes, adatvédelem-központú, offline is használható Flutter alkalmazás személyes könyvtár kezelésére. Könyveket, mangákat és képregényeket kamerás ISBN-vonalkód beolvasással, online cím/szerző kereséssel vagy teljesen manuális űrlapon lehet felvenni. Az alkalmazás többlépcsős stratégiával (Google Books, Open Library, Moly.hu, valamint automatikus japán–angol/romaji fordítóval) gyűjti be a könyv adatait és borítóját, majd helyi SQLite-adatbázisban tárolja.
+Az alkalmazás kétfázisú keresési stratégiával (először gyors angol/nemzetközi JSON API-k: Google Books és Open Library, majd végső tartalékként a magyar Moly.hu, kiegészítve automatikus japán–angol/romaji fordítóval) gyűjti be a könyv adatait és borítóját, majd a felhasználó könyvtárát helyi, 256 bites ChaCha20 algoritmussal titkosított SQLite-adatbázisban tárolja.
 
 ## Fő funkciók
 
-- **Többforrású ISBN azonosítás**: ISBN-13 és ISBN-10 ellenőrzés és keresés Google Books, Open Library és Moly.hu forrásokból, japán kiadások automatikus fordításával és átírásával (Romaji).
-- **Kamerás vonalkódolvasó**: ML Kit alapú szkenner egyszerű célzókerettel, zseblámpával, kameraváltással és kézi ISBN megadással.
-- **Online katalóguskereső és kézi könyvfelvétel**: Keresés cím vagy szerző alapján vonalkód nélkül is, illetve űrlapos kézi hozzáadás és szerkesztés offline vagy ISBN nélküli kiadásokhoz.
-- **Olvasási haladás és állapotkövetés**: 6 olvasási állapot, oldalszám-csúszka és gyorsgombok (`+10`, `+25` oldal), személyes 0.5–5.0 csillagos értékelés összevetve a közösségi átlaggal, valamint jegyzetelés.
-- **Személyes könyvtár szűrése és rendezése**: Kombinálható szöveges keresés, állapotszűrés és többféle rendezés reszponzív rács- vagy listanézetben.
+- **Gyors kamerás vonalkódolvasó (képadat-izolációval)**: ML Kit alapú, azonnali EAN-13 / EAN-8 / UPC vonalkód-felismerés `returnImage: false` beállítással, így az alkalmazás soha nem látja vagy menti el a kameraképet és a galériát.
+- **Kétfázisú, többforrású ISBN azonosítás**: Először a gyors angol/nemzetközi API-kban (Google Books, Open Library Direct és Search) keres, és csak találat hiányában kérdezi le a lassabb magyar Moly.hu oldalt.
+- **Titkosított helyi tárolás (256 bites ChaCha20 + MAC)**: A beszkennelt könyvek az alkalmazás elszigetelt belső tárhelyén, mezőszinten titkosítva (`ENC1:<base64>`) kerülnek mentésre (`allowBackup="false"`, `.nomedia` védelemmel), így külső alkalmazások nem férhetnek hozzá és nem tudják gyorsítótárazni.
+- **Online katalóguskereső és kézi könyvfelvétel**: Keresés cím vagy szerző alapján vonalkód nélkül is, illetve űrlapos kézi hozzáadás és szerkesztés.
+- **Olvasási haladás és állapotkövetés**: 6 olvasási állapot, oldalszám-csúszka és gyorsgombok, személyes 0.5–5.0 csillagos értékelés összevetve a közösségi átlaggal, valamint titkosított jegyzetelés.
 - **Statisztika és éves olvasási kihívás**: Testreszabható éves olvasási cél követése, összes elolvasott oldalszám, állapotszerinti kördiagram és havi gyarapodási oszlopdiagram.
-- **Reszponzív kialakítás**: Egyszerű, letisztult sötét téma automatikusan alkalmazkodó navigációval (`BottomNavigationBar` mobilon, `NavigationRail` széles kijelzőn) és dinamikus kártyaráccsal.
+- **Letisztult sötét téma (Dark Mode)**: Egyszerű, animációmentes, átlátható felület reszponzív elrendezéssel (`BottomNavigationBar` mobilon, `NavigationRail` széles kijelzőn).
 
-## Felépítés
+## Projektstruktúra (Source Tree)
 
-- `lib/data/models/`: Könyv- (`Book`) és olvasásiállapot-modellek (`ReadingStatus`).
-- `lib/data/database/`: SQLite-adatbázis (`AppDatabase`), séma-migrációk, lekérdezések és statisztikák.
-- `lib/data/services/`: ISBN-validátor (`IsbnValidator`), külső API-integráció (`BookApiService`) és strukturált hibaosztályok (`AppException`).
-- `lib/providers/`: Állapotkezelés Riverpoddal (`BookListNotifier`, `YearlyGoalNotifier`, `bookStatsProvider`).
-- `lib/ui/screens/`: Könyvtár (`HomeScreen`), könyv hozzáadása/keresése (`AddBookScreen`), vonalkódolvasó (`ScannerScreen`), könyvadatlap (`BookDetailScreen`) és statisztika (`StatsScreen`).
-- `lib/ui/widgets/` és `lib/ui/theme/`: Újrafelhasználható felületi komponensek és egységes Material 3 sötét téma.
+```text
+free_lib_app/
+├── android/                        # Android natív konfiguráció, Manifest és generált ikonok (mipmap-*)
+├── assets/
+│   └── icons/
+│       └── icon.png                # Alkalmazás- és APK-ikon forrásfájl
+├── lib/
+│   ├── main.dart                   # Alkalmazás belépési pont és globális hibakezelés
+│   ├── data/
+│   │   ├── database/
+│   │   │   └── app_database.dart   # SQLite adatbázis-kezelő és automatikus titkosítási migráció
+│   │   ├── models/
+│   │   │   ├── book.dart           # Könyv (Book) adatmodell
+│   │   │   └── reading_status.dart # Olvasási állapotok (ReadingStatus)
+│   │   └── services/
+│   │       ├── app_exceptions.dart             # Strukturált kivételosztályok
+│   │       ├── book_api_service.dart           # Kétfázisú ISBN és könyvkereső API szolgáltatás
+│   │       ├── isbn_validator.dart             # ISBN-10 / ISBN-13 ellenőrző és konvertáló
+│   │       └── library_encryption_service.dart # 256 bites ChaCha20 + MAC helyi titkosító
+│   ├── providers/
+│   │   ├── book_providers.dart     # Riverpod állapotkezelők (könyvlista, szűrők, statisztika)
+│   │   └── database_provider.dart  # Adatbázis és API szolgáltatók
+│   └── ui/
+│       ├── screens/                # Képernyők (Főoldal, Hozzáadás, Szkenner, Adatlap, Statisztika)
+│       ├── theme/                  # Egyszerű sötét téma (AppTheme) és színpaletta (AppColors)
+│       └── widgets/                # Újrafelhasználható UI elemek (BookCard, EmptyState, stb.)
+├── test/
+│   └── free_lib_test.dart          # Egység- és felületi (widget) tesztek
+├── pubspec.yaml                    # Függőségek, eszközök és ikon-generátor konfiguráció
+└── FreeLib_latest.apk              # Telepíthető, aláírt kiadási (release) Android APK csomag
+```
 
-## Fő technológiák
-
-Flutter és Dart, Riverpod, SQLite (`sqflite`), `mobile_scanner` (ML Kit), Dio, `fl_chart`, Google Books API, Open Library API és Moly.hu.
-
-## Futtatás és tesztelés
+## Futtatás, tesztelés és csomagolás
 
 ```sh
 flutter pub get
+dart run flutter_launcher_icons
 flutter analyze
 flutter test
-flutter run
+flutter build apk --release
 ```

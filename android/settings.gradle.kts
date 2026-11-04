@@ -1,4 +1,4 @@
-// Fix for com.android.prefs.AndroidLocationsException when both ANDROID_PREFS_ROOT and ANDROID_USER_HOME are set
+// Javítás a com.android.prefs.AndroidLocationsException hibára, ha az ANDROID_PREFS_ROOT és ANDROID_USER_HOME egyszerre van beállítva
 try {
     val processEnv = Class.forName("java.lang.ProcessEnvironment")
     val envField = processEnv.getDeclaredField("theEnvironment")
@@ -11,7 +11,7 @@ try {
     @Suppress("UNCHECKED_CAST")
     (ciEnvField.get(null) as? MutableMap<String, String>)?.remove("ANDROID_PREFS_ROOT")
 } catch (e: Throwable) {
-    // Ignore if running on non-Windows or if reflection is restricted
+    // Figyelmen kívül hagyható nem Windows rendszeren vagy korlátozott reflexiónál
 }
 
 pluginManagement {

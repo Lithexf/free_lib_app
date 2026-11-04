@@ -1,4 +1,4 @@
-# Mobile Scanner & ML Kit Proguard Rules
+# Mobile Scanner és ML Kit ProGuard megtartási szabályok
 -keep class com.google.mlkit.** { *; }
 -keep interface com.google.mlkit.** { *; }
 -keep class com.google.android.gms.internal.mlkit_vision_barcode.** { *; }

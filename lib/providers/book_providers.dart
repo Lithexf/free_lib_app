@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/book.dart';
 import 'database_provider.dart';
 
-/// Sort options for the book library
+/// Rendezési lehetőségek a könyvtárhoz
 enum BookSortOrder {
   dateAddedDesc('Legutóbb hozzáadott'),
   dateAddedAsc('Legrégebbi elöl'),
@@ -32,22 +32,22 @@ enum BookSortOrder {
   }
 }
 
-/// Current sort order state
+/// Aktuális rendezési sorrend állapota
 final bookSortOrderProvider = StateProvider<BookSortOrder>((ref) {
   return BookSortOrder.dateAddedDesc;
 });
 
-/// Current status filter (null = show all)
+/// Aktuális olvasási állapot szűrő (`null` = összes megjelenítése)
 final statusFilterProvider = StateProvider<String?>((ref) {
   return null;
 });
 
-/// Search query state
+/// Keresési kifejezés állapota
 final searchQueryProvider = StateProvider<String>((ref) {
   return '';
 });
 
-/// Notifier that manages the book library and reacts to filter/search/sort changes
+/// A könyvtárat kezelő Notifier, amely reagál a szűrési, keresési és rendezési változásokra
 class BookListNotifier extends AsyncNotifier<List<Book>> {
   @override
   Future<List<Book>> build() async {
@@ -75,18 +75,18 @@ class BookListNotifier extends AsyncNotifier<List<Book>> {
     );
   }
 
-  /// Refresh the book list and statistics from database
+  /// Könyvlista és statisztikák újratöltése az adatbázisból
   Future<void> refresh() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(_fetchCurrent);
     ref.invalidate(bookStatsProvider);
   }
 
-  /// Add a new book to the library
+  /// Új könyv hozzáadása a könyvtárhoz
   Future<Book> addBook(Book book) async {
     final db = ref.read(databaseProvider);
 
-    // Check if already exists (checks ISBN-10 & ISBN-13 variants)
+    // Ellenőrzés, hogy létezik-e már (ISBN-10 és ISBN-13 változatokat is vizsgálva)
     final existing = await db.getBookByIsbn(book.isbn);
     if (existing != null) return existing;
 
@@ -95,7 +95,7 @@ class BookListNotifier extends AsyncNotifier<List<Book>> {
     return book.copyWith(id: id);
   }
 
-  /// Update an existing book
+  /// Meglévő könyv adatainak frissítése
   Future<Book> updateBook(Book book) async {
     final db = ref.read(databaseProvider);
     await db.updateBook(book);
@@ -103,27 +103,27 @@ class BookListNotifier extends AsyncNotifier<List<Book>> {
     return book;
   }
 
-  /// Delete a book
+  /// Könyv törlése azonosító alapján
   Future<void> deleteBook(int id) async {
     final db = ref.read(databaseProvider);
     await db.deleteBook(id);
     await refresh();
   }
 
-  /// Scan and add: look up ISBN, fetch metadata, add to library
+  /// Szkennelés és hozzáadás: ISBN keresése online, metaadatok letöltése, majd mentés a könyvtárba
   Future<Book?> scanAndAdd(String isbn) async {
     final apiService = ref.read(bookApiServiceProvider);
     final db = ref.read(databaseProvider);
 
-    // Check if already in library
+    // Ellenőrzés, hogy szerepel-e már a könyvtárban
     final existing = await db.getBookByIsbn(isbn);
     if (existing != null) return existing;
 
-    // Fetch metadata from APIs (may throw NetworkException if offline)
+    // Metaadatok lekérése az API-kból (offline állapot esetén NetworkException-t dobhat)
     final book = await apiService.lookupByIsbn(isbn);
     if (book == null) return null;
 
-    // Re-check with normalized/resolved ISBN returned by the API
+    // Újbóli ellenőrzés az API által visszaadott feloldott/normalizált ISBN-nel
     final resolvedExisting = await db.getBookByIsbn(book.isbn);
     if (resolvedExisting != null) return resolvedExisting;
 
@@ -133,11 +133,11 @@ class BookListNotifier extends AsyncNotifier<List<Book>> {
   }
 }
 
-/// The main book list provider
+/// A fő könyvlista szolgáltató (provider)
 final bookListProvider =
     AsyncNotifierProvider<BookListNotifier, List<Book>>(BookListNotifier.new);
 
-/// Notifier for managing the user's annual reading goal (persisted in SQLite)
+/// A felhasználó éves olvasási célját kezelő Notifier (SQLite-ban tárolva)
 class YearlyGoalNotifier extends AsyncNotifier<int> {
   static const String _settingKey = 'yearly_reading_goal';
   static const int defaultGoal = 12;
@@ -162,7 +162,7 @@ class YearlyGoalNotifier extends AsyncNotifier<int> {
 final yearlyGoalProvider =
     AsyncNotifierProvider<YearlyGoalNotifier, int>(YearlyGoalNotifier.new);
 
-/// Statistics provider (independent of active UI search/status filters)
+/// Statisztikai szolgáltató (független az aktív keresési/állapot szűrőktől)
 final bookStatsProvider = FutureProvider<BookStats>((ref) async {
   final db = ref.watch(databaseProvider);
   final yearlyGoal = await ref.watch(yearlyGoalProvider.future);
@@ -185,7 +185,7 @@ final bookStatsProvider = FutureProvider<BookStats>((ref) async {
   );
 });
 
-/// Immutable statistics data class
+/// Megváltoztathatatlan (immutable) statisztikai adatosztály
 class BookStats {
   final int totalCount;
   final Map<String, int> countByStatus;

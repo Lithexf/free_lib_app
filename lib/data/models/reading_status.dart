@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// All possible reading statuses a book can have in the user's library.
+/// A felhasználó könyvtárában szereplő könyvek lehetséges olvasási állapotai.
 enum ReadingStatus {
   planToRead('Tervben van', Icons.bookmark_outline, Color(0xFF5B8DEF)),
   reading('Olvasom', Icons.auto_stories, Color(0xFF00D9A6)),
@@ -11,16 +11,16 @@ enum ReadingStatus {
 
   const ReadingStatus(this.label, this.icon, this.color);
 
-  /// Human-readable label for display
+  /// Megjelenítendő magyar megnevezés
   final String label;
 
-  /// Icon associated with this status
+  /// Az állapothoz tartozó ikon
   final IconData icon;
 
-  /// Color associated with this status
+  /// Az állapothoz tartozó szín
   final Color color;
 
-  /// Convert from database string to enum
+  /// Adatbázisbeli szöveges értékből felsorolási típusra alakítás
   static ReadingStatus fromString(String value) {
     return ReadingStatus.values.firstWhere(
       (s) => s.name == value,

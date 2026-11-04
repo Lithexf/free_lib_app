@@ -1,4 +1,4 @@
-/// Base exception type for domain and infrastructure errors in FreeLib.
+/// Alap kivételosztály a FreeLib alkalmazás üzleti és infrastrukturális hibáihoz.
 sealed class AppException implements Exception {
   final String userMessage;
   final Object? cause;
@@ -9,8 +9,8 @@ sealed class AppException implements Exception {
   String toString() => userMessage;
 }
 
-/// Thrown when an external API call fails due to missing internet connection,
-/// DNS failure, or timeout.
+/// Akkor keletkezik, ha egy külső API hívás hiányzó internetkapcsolat,
+/// DNS-hiba vagy időtúllépés miatt meghiúsul.
 class NetworkException extends AppException {
   const NetworkException([
     super.userMessage =
@@ -19,7 +19,7 @@ class NetworkException extends AppException {
   ]) : super(cause: cause);
 }
 
-/// Thrown when an external service returns an unexpected error response.
+/// Akkor keletkezik, ha egy külső szolgáltatás váratlan hibaválaszt ad vissza.
 class ApiLookupException extends AppException {
   const ApiLookupException([
     super.userMessage =
@@ -28,7 +28,7 @@ class ApiLookupException extends AppException {
   ]) : super(cause: cause);
 }
 
-/// Thrown when attempting to insert a book whose ISBN is already in the library.
+/// Akkor keletkezik, ha olyan könyvet próbálunk beszúrni, amelynek ISBN száma már szerepel a könyvtárban.
 class DuplicateBookException extends AppException {
   final String isbn;
   final String existingTitle;
@@ -39,11 +39,10 @@ class DuplicateBookException extends AppException {
   }) : super('A(z) „$existingTitle” (ISBN: $isbn) már szerepel a könyvtáradban.');
 }
 
-/// Thrown when a local SQLite database operation fails.
+/// Akkor keletkezik, ha egy helyi SQLite adatbázis-művelet meghiúsul.
 class StorageException extends AppException {
   const StorageException([
     super.userMessage = 'Adatbázis hiba történt a művelet közben.',
     Object? cause,
   ]) : super(cause: cause);
 }
-

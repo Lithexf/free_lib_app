@@ -12,7 +12,7 @@ import '../widgets/scan_overlay.dart';
 import 'add_book_screen.dart';
 import 'book_detail_screen.dart';
 
-/// Egyszerű kamerás vonalkódolvasó képernyő kézi ISBN megadási lehetőséggel.
+/// Gyors kamerás vonalkódolvasó képernyő azonnali ISBN-felismeréssel.
 class ScannerScreen extends ConsumerStatefulWidget {
   const ScannerScreen({super.key});
 
@@ -22,10 +22,9 @@ class ScannerScreen extends ConsumerStatefulWidget {
 
 class _ScannerScreenState extends ConsumerState<ScannerScreen>
     with WidgetsBindingObserver {
-  MobileScannerController? _controller;
+  late final MobileScannerController _controller;
   bool _isProcessing = false;
-  bool _hasPermission = false;
-  bool _permissionChecked = false;
+  bool _permissionDenied = false;
   bool _torchEnabled = false;
   final _manualIsbnController = TextEditingController();
 
@@ -33,76 +32,74 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _checkPermission();
+
+    // Azonnali kamera-inicializálás késleltetés nélkül, kizárólag könyv-vonalkód (EAN/UPC)
+    // formátumokra szűrve. returnImage: false biztosítja, hogy az app SOHA nem kapja meg
+    // és nem tárolja el a kameraképet, csak a felismert számkódot.
+    _controller = MobileScannerController(
+      autoStart: true,
+      returnImage: false,
+      detectionSpeed: DetectionSpeed.unrestricted,
+      facing: CameraFacing.back,
+      torchEnabled: false,
+      formats: const [
+        BarcodeFormat.ean13,
+        BarcodeFormat.ean8,
+        BarcodeFormat.upcA,
+        BarcodeFormat.upcE,
+      ],
+    );
+
+    _verifyPermissionAsync();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !_hasPermission) {
-      _recheckPermissionOnResume();
+    if (state == AppLifecycleState.resumed && _permissionDenied) {
+      _verifyPermissionAsync();
     }
   }
 
-  Future<void> _recheckPermissionOnResume() async {
-    final status = await Permission.camera.status;
-    if (!mounted) return;
-    if (status.isGranted && !_hasPermission) {
-      setState(() {
-        _hasPermission = true;
-        _controller ??= MobileScannerController(
-          detectionSpeed: DetectionSpeed.normal,
-          facing: CameraFacing.back,
-          torchEnabled: false,
-        );
-      });
-    }
-  }
-
-  Future<void> _checkPermission() async {
+  Future<void> _verifyPermissionAsync() async {
     try {
-      final status = await Permission.camera.request();
-      if (!mounted) return;
-      setState(() {
-        _hasPermission = status.isGranted;
-        _permissionChecked = true;
-        if (_hasPermission) {
-          _controller = MobileScannerController(
-            detectionSpeed: DetectionSpeed.normal,
-            facing: CameraFacing.back,
-            torchEnabled: false,
-          );
+      final status = await Permission.camera.status;
+      if (status.isGranted) {
+        if (mounted && _permissionDenied) {
+          setState(() => _permissionDenied = false);
+          _controller.start();
         }
-      });
-    } catch (_) {
+        return;
+      }
+
+      final requested = await Permission.camera.request();
       if (!mounted) return;
-      setState(() {
-        _hasPermission = false;
-        _permissionChecked = true;
-      });
+      if (requested.isGranted) {
+        setState(() => _permissionDenied = false);
+        _controller.start();
+      } else {
+        setState(() => _permissionDenied = true);
+      }
+    } catch (_) {
+      // Ha a platform nem támogatja a permission_handler-t, a MobileScanner kezeli.
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller?.dispose();
+    _controller.dispose();
     _manualIsbnController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_permissionChecked) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (!_hasPermission) {
+    if (_permissionDenied) {
       return _buildPermissionDenied();
     }
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Vonalkód szkennelés'),
         actions: [
@@ -110,7 +107,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
             tooltip: 'Zseblámpa',
             icon: Icon(_torchEnabled ? Icons.flash_on : Icons.flash_off),
             onPressed: () async {
-              await _controller?.toggleTorch();
+              await _controller.toggleTorch();
               if (mounted) {
                 setState(() => _torchEnabled = !_torchEnabled);
               }
@@ -119,7 +116,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
           IconButton(
             tooltip: 'Kamera váltása',
             icon: const Icon(Icons.cameraswitch),
-            onPressed: () => _controller?.switchCamera(),
+            onPressed: () => _controller.switchCamera(),
           ),
         ],
       ),
@@ -130,18 +127,60 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
               children: [
                 Positioned.fill(
                   child: MobileScanner(
-                    controller: _controller!,
+                    controller: _controller,
                     onDetect: _onDetect,
-                    errorBuilder: (context, error) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            'Kamera hiba: ${error.errorDetails?.message ?? "Nem sikerült elindítani a kamerát."}',
-                            style:
-                                const TextStyle(color: AppColors.textPrimary),
-                            textAlign: TextAlign.center,
+                    // Fekete képernyő helyett tiszta töltőfelület, amíg a kameraszenzor megnyílik
+                    placeholderBuilder: (context) {
+                      return Container(
+                        color: AppColors.background,
+                        child: const Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 12),
+                              Text(
+                                'Kamera indítása...',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
                           ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error) {
+                      if (error.errorCode ==
+                          MobileScannerErrorCode.permissionDenied) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted && !_permissionDenied) {
+                            setState(() => _permissionDenied = true);
+                          }
+                        });
+                      }
+                      return Container(
+                        color: AppColors.background,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.videocam_off_outlined,
+                              color: AppColors.textMuted,
+                              size: 42,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Kamera nem érhető el\n${error.errorDetails?.message ?? "Használd az alábbi kézi ISBN megadást."}',
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                         ),
                       );
                     },
@@ -152,7 +191,17 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                   Container(
                     color: Colors.black54,
                     child: const Center(
-                      child: CircularProgressIndicator(),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 12),
+                          Text(
+                            'ISBN keresése...',
+                            style: TextStyle(color: AppColors.textPrimary),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
               ],
@@ -190,7 +239,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: _onManualSubmit,
+                  onPressed: _isProcessing ? null : _onManualSubmit,
                   child: const Text('Keresés'),
                 ),
               ],
@@ -274,7 +323,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton(
-                      onPressed: _onManualSubmit,
+                      onPressed: _isProcessing ? null : _onManualSubmit,
                       child: const Text('Keresés'),
                     ),
                   ],
@@ -304,10 +353,11 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
 
     for (final barcode in capture.barcodes) {
       final rawValue = barcode.rawValue;
-      if (rawValue == null) continue;
+      if (rawValue == null || rawValue.isEmpty) continue;
 
       final isbn = IsbnValidator.normalize(rawValue);
       if (isbn != null) {
+        HapticFeedback.selectionClick();
         _processIsbn(isbn);
         return;
       }
@@ -336,8 +386,8 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     setState(() => _isProcessing = true);
 
     try {
-      _controller?.stop();
-
+      // Nem állítjuk le a kamerát (_controller.stop()), mert az fekete képernyőt
+      // és lassú újraindulást okoz; az _isProcessing flag azonnal blokkolja az újabb beolvasást.
       final db = ref.read(databaseProvider);
       final existing = await db.getBookByIsbn(isbn);
       if (existing != null) {
@@ -358,7 +408,6 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
               ),
             ),
           );
-          _controller?.start();
         }
         return;
       }
@@ -381,7 +430,6 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
             ),
           ),
         );
-        _controller?.start();
       }
     } on AppException catch (e) {
       if (mounted) {
@@ -394,14 +442,12 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
             ),
           ),
         );
-        _controller?.start();
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Hiba történt a keresés közben.')),
         );
-        _controller?.start();
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);

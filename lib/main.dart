@@ -10,10 +10,10 @@ import 'ui/theme/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Hungarian locale formatting for dates
+  // Magyar nyelvi területi beállítások inicializálása a dátumformázáshoz
   await initializeDateFormatting('hu');
 
-  // Global error handling for uncaught framework and async errors
+  // Globális hibakezelés a nem kezelt keretrendszerbeli és aszinkron hibákra
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
   };
@@ -22,7 +22,7 @@ Future<void> main() async {
     return true;
   };
 
-  // Friendly fallback UI instead of grey/red crash box
+  // Barátságos hibaoldal megjelenítése a piros/szürke összeomlási képernyő helyett
   ErrorWidget.builder = (FlutterErrorDetails details) {
     return Material(
       color: AppColors.background,
@@ -65,7 +65,7 @@ Future<void> main() async {
     );
   };
 
-  // Set status bar style
+  // Állapotsor és navigációs sáv stílusának beállítása
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -75,7 +75,7 @@ Future<void> main() async {
     ),
   );
 
-  // Support both portrait and landscape orientations for responsive layouts
+  // Álló és fekvő tájolás együttes engedélyezése a reszponzív elrendezéshez
   await SystemChrome.setPreferredOrientations(DeviceOrientation.values);
 
   runApp(const ProviderScope(child: FreeLibApp()));
