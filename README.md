@@ -18,12 +18,12 @@ Mivel a [Libib](https://www.libib.com/) fizetős lett, a **FreeLib** egy ingyene
 ## Fő funkciók
 
 - **Többforrású ISBN azonosítás**: ISBN-13 és ISBN-10 ellenőrzés és keresés Google Books, Open Library és Moly.hu forrásokból, japán kiadások automatikus fordításával és átírásával (Romaji).
-- **Kamerás vonalkódolvasó**: Valós idejű ML Kit alapú szkenner animált célzókerettel, zseblámpával, kameraváltással és kézi ISBN megadással.
+- **Kamerás vonalkódolvasó**: ML Kit alapú szkenner egyszerű célzókerettel, zseblámpával, kameraváltással és kézi ISBN megadással.
 - **Online katalóguskereső és kézi könyvfelvétel**: Keresés cím vagy szerző alapján vonalkód nélkül is, illetve űrlapos kézi hozzáadás és szerkesztés offline vagy ISBN nélküli kiadásokhoz.
 - **Olvasási haladás és állapotkövetés**: 6 olvasási állapot, oldalszám-csúszka és gyorsgombok (`+10`, `+25` oldal), személyes 0.5–5.0 csillagos értékelés összevetve a közösségi átlaggal, valamint jegyzetelés.
 - **Személyes könyvtár szűrése és rendezése**: Kombinálható szöveges keresés, állapotszűrés és többféle rendezés reszponzív rács- vagy listanézetben.
 - **Statisztika és éves olvasási kihívás**: Testreszabható éves olvasási cél követése, összes elolvasott oldalszám, állapotszerinti kördiagram és havi gyarapodási oszlopdiagram.
-- **Reszponzív kialakítás**: Automatikusan alkalmazkodó navigáció (`NavigationBar` mobilon, `NavigationRail` széles kijelzőn / fekvő módban / tableten) és dinamikus kártyarács.
+- **Reszponzív kialakítás**: Egyszerű, letisztult sötét téma automatikusan alkalmazkodó navigációval (`BottomNavigationBar` mobilon, `NavigationRail` széles kijelzőn) és dinamikus kártyaráccsal.
 
 ## Felépítés
 

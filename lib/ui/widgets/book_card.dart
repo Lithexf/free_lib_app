@@ -2,13 +2,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../data/models/book.dart';
 import '../../data/models/reading_status.dart';
-import '../../ui/theme/app_colors.dart';
+import '../theme/app_colors.dart';
 import 'status_badge.dart';
 
-/// A premium book card for grid/list display.
-///
-/// Shows cover image, title, author, rating, reading progress, and status badge
-/// with glassmorphism styling and smooth animations.
+/// Egyszerű könyvkártya rács- és listanézethez.
 class BookCard extends StatelessWidget {
   final Book book;
   final VoidCallback? onTap;
@@ -23,256 +20,172 @@ class BookCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return isGridView ? _buildGridCard(context) : _buildListCard(context);
+    return isGridView ? _buildGridCard() : _buildListCard();
   }
 
-  Widget _buildGridCard(BuildContext context) {
+  Widget _buildGridCard() {
     final status = ReadingStatus.fromString(book.status);
     final progress = book.readingProgress;
-    final showProgress =
-        progress != null && progress > 0 && book.status != 'completed';
 
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.surfaceBorder),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Cover image
-              Expanded(
-                flex: 11,
-                child: Stack(
-                  fit: StackFit.expand,
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 3,
+              child: SizedBox(
+                width: double.infinity,
+                child: _buildCoverImage(),
+              ),
+            ),
+            if (progress != null && progress > 0 && book.status != 'completed')
+              LinearProgressIndicator(
+                value: progress,
+                minHeight: 3,
+                backgroundColor: AppColors.surfaceLight,
+                color: AppColors.accent,
+              ),
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Hero(
-                      tag: 'book-cover-${book.isbn}',
-                      child: _buildCoverImage(),
-                    ),
-                    if (showProgress)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          minHeight: 4,
-                          backgroundColor: Colors.black54,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            AppColors.accent,
-                          ),
-                        ),
+                    Text(
+                      book.title,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    if (book.authors != null)
+                      Text(
+                        book.authors!,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        if (book.rating != null && book.rating! > 0) ...[
+                          const Icon(
+                            Icons.star,
+                            size: 14,
+                            color: Colors.amber,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            book.rating!.toStringAsFixed(1),
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 11,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Flexible(
+                          child: StatusBadge(status: status, compact: true),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-
-              // Book info
-              Expanded(
-                flex: 6,
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Title
-                      Text(
-                        book.title,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          height: 1.2,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-
-                      // Author
-                      if (book.authors != null)
-                        Text(
-                          book.authors!,
-                          style: const TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 11,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-
-                      const Spacer(),
-
-                      // Rating + Status row
-                      Row(
-                        children: [
-                          if (book.rating != null && book.rating! > 0) ...[
-                            const Icon(
-                              Icons.star_rounded,
-                              size: 14,
-                              color: AppColors.primary,
-                            ),
-                            const SizedBox(width: 2),
-                            Text(
-                              book.rating!.toStringAsFixed(1),
-                              style: const TextStyle(
-                                color: AppColors.primary,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                          ],
-                          Flexible(
-                            child: StatusBadge(
-                              status: status,
-                              compact: true,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildListCard(BuildContext context) {
+  Widget _buildListCard() {
     final status = ReadingStatus.fromString(book.status);
     final progress = book.readingProgress;
-    final showProgress =
-        progress != null && progress > 0 && book.status != 'completed';
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Material(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Card(
+        child: ListTile(
           onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.surfaceBorder),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          leading: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: SizedBox(
+              width: 46,
+              height: 68,
+              child: _buildCoverImage(),
             ),
-            child: Row(
-              children: [
-                // Cover thumbnail
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Hero(
-                    tag: 'book-cover-${book.isbn}',
-                    child: SizedBox(
-                      width: 60,
-                      height: 85,
-                      child: _buildCoverImage(),
-                    ),
+          ),
+          title: Text(
+            book.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (book.authors != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  book.authors!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
                   ),
-                ),
-                const SizedBox(width: 14),
-
-                // Book info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        book.title,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      if (book.authors != null)
-                        Text(
-                          book.authors!,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 13,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 6,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          if (book.rating != null && book.rating! > 0)
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.star_rounded,
-                                    size: 16, color: AppColors.primary),
-                                const SizedBox(width: 2),
-                                Text(
-                                  book.rating!.toStringAsFixed(1),
-                                  style: const TextStyle(
-                                    color: AppColors.primary,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          StatusBadge(status: status, compact: true),
-                          if (showProgress)
-                            Text(
-                              '${(progress * 100).round()}%',
-                              style: const TextStyle(
-                                color: AppColors.accent,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                        ],
-                      ),
-                      if (showProgress) ...[
-                        const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 4,
-                            backgroundColor: AppColors.surfaceLight,
-                            valueColor: const AlwaysStoppedAnimation<Color>(
-                              AppColors.accent,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-
-                const SizedBox(width: 8),
-                // Arrow
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.textMuted,
-                  size: 24,
                 ),
               ],
-            ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  StatusBadge(status: status, compact: true),
+                  if (book.rating != null && book.rating! > 0)
+                    Text(
+                      '★ ${book.rating!.toStringAsFixed(1)}',
+                      style: const TextStyle(
+                        color: Colors.amber,
+                        fontSize: 12,
+                      ),
+                    ),
+                  if (progress != null &&
+                      progress > 0 &&
+                      book.status != 'completed')
+                    Text(
+                      '${(progress * 100).round()}%',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 11,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          trailing: const Icon(
+            Icons.chevron_right,
+            color: AppColors.textMuted,
           ),
         ),
       ),
@@ -284,8 +197,8 @@ class BookCard extends StatelessWidget {
       return CachedNetworkImage(
         imageUrl: book.coverUrl!,
         fit: BoxFit.cover,
-        width: double.infinity,
-        height: double.infinity,
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
         placeholder: (context, url) => _buildPlaceholder(),
         errorWidget: (context, url, error) => _buildPlaceholder(),
       );
@@ -296,31 +209,21 @@ class BookCard extends StatelessWidget {
   Widget _buildPlaceholder() {
     return Container(
       color: AppColors.surfaceLight,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.menu_book_rounded,
-              color: AppColors.textMuted,
-              size: 28,
-            ),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                book.title,
-                style: const TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 10,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.book, color: AppColors.textMuted, size: 24),
+          const SizedBox(height: 4),
+          Text(
+            book.title,
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }

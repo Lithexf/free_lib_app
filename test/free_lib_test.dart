@@ -12,7 +12,6 @@ import 'package:free_lib_app/data/services/isbn_validator.dart';
 import 'package:free_lib_app/providers/book_providers.dart';
 import 'package:free_lib_app/ui/screens/home_screen.dart';
 import 'package:free_lib_app/ui/theme/app_theme.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Minimal in-memory Dio adapter for hermetic API service tests.
 class _FakeHttpAdapter implements HttpClientAdapter {
@@ -47,10 +46,6 @@ class _FakeYearlyGoalNotifier extends YearlyGoalNotifier {
 }
 
 void main() {
-  setUpAll(() {
-    GoogleFonts.config.allowRuntimeFetching = false;
-  });
-
   group('IsbnValidator', () {
     test('validates ISBN-10 and ISBN-13 checksums accurately', () {
       expect(IsbnValidator.isValid('0-14-028329-3'), isTrue);
@@ -180,7 +175,8 @@ void main() {
       );
     }
 
-    testWidgets('uses NavigationBar on compact mobile screens and navigates tabs',
+    testWidgets(
+        'uses BottomNavigationBar on compact mobile screens and navigates tabs',
         (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
@@ -189,7 +185,7 @@ void main() {
       await tester.pumpWidget(buildTestApp(size: const Size(390, 844)));
       await tester.pumpAndSettle();
 
-      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.byType(BottomNavigationBar), findsOneWidget);
       expect(find.byType(NavigationRail), findsNothing);
       expect(find.text('A könyvtárad üres'), findsOneWidget);
 
@@ -230,7 +226,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(NavigationRail), findsOneWidget);
-      expect(find.byType(NavigationBar), findsNothing);
+      expect(find.byType(BottomNavigationBar), findsNothing);
       expect(find.text('Dűne'), findsWidgets);
       expect(find.text('Frank Herbert'), findsOneWidget);
     });

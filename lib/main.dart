@@ -70,7 +70,7 @@ Future<void> main() async {
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Color(0xFF1A1D36),
+      systemNavigationBarColor: Color(0xFF1E1E1E),
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );

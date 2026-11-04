@@ -7,18 +7,12 @@ import '../../data/services/app_exceptions.dart';
 import '../../data/services/isbn_validator.dart';
 import '../../providers/book_providers.dart';
 import '../../providers/database_provider.dart';
-import '../../ui/theme/app_colors.dart';
+import '../theme/app_colors.dart';
 import '../widgets/scan_overlay.dart';
 import 'add_book_screen.dart';
 import 'book_detail_screen.dart';
 
-/// Full-screen barcode scanner for ISBN detection.
-///
-/// Features:
-/// - Camera preview with custom animated scan overlay
-/// - Torch toggle with visual state, camera flip
-/// - Debounced scan detection
-/// - Manual ISBN entry & fallback to manual book creation when offline or unlisted
+/// Egyszerű kamerás vonalkódolvasó képernyő kézi ISBN megadási lehetőséggel.
 class ScannerScreen extends ConsumerStatefulWidget {
   const ScannerScreen({super.key});
 
@@ -100,10 +94,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   Widget build(BuildContext context) {
     if (!_permissionChecked) {
       return const Scaffold(
-        backgroundColor: AppColors.background,
-        body: Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
-        ),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -112,271 +103,104 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
+      appBar: AppBar(
+        title: const Text('Vonalkód szkennelés'),
+        actions: [
+          IconButton(
+            tooltip: 'Zseblámpa',
+            icon: Icon(_torchEnabled ? Icons.flash_on : Icons.flash_off),
+            onPressed: () async {
+              await _controller?.toggleTorch();
+              if (mounted) {
+                setState(() => _torchEnabled = !_torchEnabled);
+              }
+            },
+          ),
+          IconButton(
+            tooltip: 'Kamera váltása',
+            icon: const Icon(Icons.cameraswitch),
+            onPressed: () => _controller?.switchCamera(),
+          ),
+        ],
+      ),
+      body: Column(
         children: [
-          // Camera preview — fills entire screen
-          Positioned.fill(
-            child: MobileScanner(
-              controller: _controller!,
-              onDetect: _onDetect,
-              errorBuilder: (context, error) {
-                return Center(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          color: AppColors.error,
-                          size: 48,
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: MobileScanner(
+                    controller: _controller!,
+                    onDetect: _onDetect,
+                    errorBuilder: (context, error) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            'Kamera hiba: ${error.errorDetails?.message ?? "Nem sikerült elindítani a kamerát."}',
+                            style:
+                                const TextStyle(color: AppColors.textPrimary),
+                            textAlign: TextAlign.center,
+                          ),
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Szkenner hiba\n\n${error.errorDetails?.message ?? "Kérjük, ellenőrizd a kamera engedélyeket és a kamerát."}',
-                          style: const TextStyle(color: Colors.white),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 20),
-                        OutlinedButton.icon(
-                          onPressed: () => _openManualFallback(),
-                          icon: const Icon(Icons.edit_note_rounded),
-                          label: const Text('Kézi könyvfelvétel megnyitása'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Scan overlay (darkens background, draws animated square frame)
-          const Positioned.fill(
-            child: ScanOverlay(),
-          ),
-
-          // Top bar with controls
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            child: _buildTopBar(),
-          ),
-
-          // Bottom bar with manual entry — anchored to bottom
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _buildBottomBar(),
-          ),
-
-          // Processing indicator
-          if (_isProcessing)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black54,
-                child: const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(color: AppColors.primary),
-                      SizedBox(height: 16),
-                      Text(
-                        'Könyv keresése...',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
-              ),
+                const Positioned.fill(child: ScanOverlay()),
+                if (_isProcessing)
+                  Container(
+                    color: Colors.black54,
+                    child: const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+              ],
             ),
+          ),
+          _buildBottomManualInput(),
         ],
       ),
     );
   }
 
-  Widget _buildTopBar() {
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            // Back button
-            _buildCircleButton(
-              icon: Icons.arrow_back_rounded,
-              tooltip: 'Vissza',
-              onPressed: () => Navigator.pop(context),
-            ),
-            const Spacer(),
-            // Torch toggle
-            _buildCircleButton(
-              icon: _torchEnabled
-                  ? Icons.flash_on_rounded
-                  : Icons.flash_off_rounded,
-              tooltip: 'Zseblámpa',
-              isActive: _torchEnabled,
-              onPressed: () async {
-                await _controller?.toggleTorch();
-                if (mounted) {
-                  setState(() => _torchEnabled = !_torchEnabled);
-                }
-              },
-            ),
-            const SizedBox(width: 12),
-            // Camera flip
-            _buildCircleButton(
-              icon: Icons.cameraswitch_rounded,
-              tooltip: 'Kamera váltása',
-              onPressed: () => _controller?.switchCamera(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCircleButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onPressed,
-    bool isActive = false,
-  }) {
+  Widget _buildBottomManualInput() {
     return Container(
-      decoration: BoxDecoration(
-        color: isActive
-            ? AppColors.primary.withValues(alpha: 0.85)
-            : AppColors.background.withValues(alpha: 0.6),
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: isActive ? AppColors.primary : AppColors.glassBorder,
-        ),
-      ),
-      child: IconButton(
-        tooltip: tooltip,
-        icon: Icon(
-          icon,
-          color: isActive ? AppColors.background : AppColors.textPrimary,
-          size: 22,
-        ),
-        onPressed: onPressed,
-      ),
-    );
-  }
-
-  Widget _buildBottomBar() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.transparent,
-            AppColors.background.withValues(alpha: 0.88),
-            AppColors.background,
-          ],
-          stops: const [0.0, 0.35, 1.0],
-        ),
-      ),
+      color: AppColors.surface,
+      padding: const EdgeInsets.all(14),
       child: SafeArea(
         top: false,
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Vagy add meg az ISBN-t manuálisan',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _manualIsbnController,
-                          keyboardType: TextInputType.text,
-                          textInputAction: TextInputAction.search,
-                          onSubmitted: (_) => _onManualSubmit(),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                                RegExp(r'[0-9Xx-]')),
-                          ],
-                          style: const TextStyle(color: AppColors.textPrimary),
-                          decoration: InputDecoration(
-                            hintText: 'pl. 978-0-14-028329-7',
-                            prefixIcon: const Icon(
-                              Icons.keyboard_rounded,
-                              color: AppColors.textMuted,
-                            ),
-                            filled: true,
-                            fillColor: AppColors.surface,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                  color: AppColors.surfaceBorder),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                  color: AppColors.surfaceBorder),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: AppColors.primary,
-                                width: 2,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      SizedBox(
-                        height: 50,
-                        width: 50,
-                        child: ElevatedButton(
-                          onPressed: _onManualSubmit,
-                          style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Icon(Icons.search_rounded, size: 24),
-                        ),
-                      ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _manualIsbnController,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) => _onManualSubmit(),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9Xx-]')),
                     ],
-                  ),
-                  const SizedBox(height: 6),
-                  TextButton.icon(
-                    onPressed: () => _openManualFallback(),
-                    icon: const Icon(Icons.travel_explore_rounded, size: 17),
-                    label: const Text(
-                      'Cím szerinti keresés vagy kézi felvétel',
-                      style: TextStyle(fontSize: 13),
-                    ),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primaryLight,
+                    decoration: const InputDecoration(
+                      hintText: 'ISBN megadása kézzel (pl. 9780140283297)',
                     ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _onManualSubmit,
+                  child: const Text('Keresés'),
+                ),
+              ],
             ),
-          ),
+            const SizedBox(height: 6),
+            TextButton(
+              onPressed: () => _openManualFallback(),
+              child: const Text('Cím szerinti keresés vagy kézi felvétel'),
+            ),
+          ],
         ),
       ),
     );
@@ -384,71 +208,53 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
 
   Widget _buildPermissionDenied() {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Szkenner'),
-        backgroundColor: AppColors.background,
-      ),
+      appBar: AppBar(title: const Text('Vonalkód szkennelés')),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
+            constraints: const BoxConstraints(maxWidth: 460),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 96,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.error.withValues(alpha: 0.1),
-                  ),
-                  child: const Icon(
-                    Icons.camera_alt_outlined,
-                    size: 44,
-                    color: AppColors.error,
-                  ),
+                const Icon(
+                  Icons.camera_alt_outlined,
+                  size: 48,
+                  color: AppColors.textMuted,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
                 const Text(
                   'Kamera engedély szükséges',
                   style: TextStyle(
                     color: AppColors.textPrimary,
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: FontWeight.w600,
                   ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'A FreeLib-nek szüksége van a kamera hozzáférésre a vonalkódok szkenneléséhez. Az ISBN-t manuálisan is megadhatod, vagy kereshetsz cím alapján.',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 14,
-                    height: 1.5,
-                  ),
+                  'A vonalkód beolvasásához engedélyezd a kamerát, vagy add meg az ISBN számot alább.',
+                  style: TextStyle(color: AppColors.textSecondary),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
+                  spacing: 10,
+                  runSpacing: 10,
                   alignment: WrapAlignment.center,
                   children: [
-                    ElevatedButton.icon(
+                    ElevatedButton(
                       onPressed: () => openAppSettings(),
-                      icon: const Icon(Icons.settings_rounded),
-                      label: const Text('Beállítások megnyitása'),
+                      child: const Text('Beállítások'),
                     ),
-                    OutlinedButton.icon(
+                    OutlinedButton(
                       onPressed: () => _openManualFallback(tabIndex: 0),
-                      icon: const Icon(Icons.travel_explore_rounded),
-                      label: const Text('Cím szerinti keresés'),
+                      child: const Text('Keresés cím alapján'),
                     ),
                   ],
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 24),
                 const Divider(),
                 const SizedBox(height: 16),
                 Row(
@@ -456,30 +262,20 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                     Expanded(
                       child: TextField(
                         controller: _manualIsbnController,
-                        keyboardType: TextInputType.text,
-                        textInputAction: TextInputAction.search,
                         onSubmitted: (_) => _onManualSubmit(),
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(
                               RegExp(r'[0-9Xx-]')),
                         ],
-                        style: const TextStyle(color: AppColors.textPrimary),
                         decoration: const InputDecoration(
-                          hintText: 'ISBN megadása manuálisan',
-                          prefixIcon: Icon(
-                            Icons.keyboard_rounded,
-                            color: AppColors.textMuted,
-                          ),
+                          hintText: 'ISBN megadása kézzel',
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _onManualSubmit,
-                        child: const Icon(Icons.search_rounded),
-                      ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _onManualSubmit,
+                      child: const Text('Keresés'),
                     ),
                   ],
                 ),
@@ -503,7 +299,6 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     );
   }
 
-  /// Handle barcode detection from camera
   void _onDetect(BarcodeCapture capture) {
     if (_isProcessing) return;
 
@@ -519,7 +314,6 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     }
   }
 
-  /// Handle manual ISBN submission
   void _onManualSubmit() {
     final text = _manualIsbnController.text.trim();
     if (text.isEmpty) return;
@@ -527,11 +321,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     final isbn = IsbnValidator.normalize(text);
     if (isbn == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Érvénytelen ISBN. Kérjük, 10 vagy 13 jegyű kódot adj meg.'),
-          backgroundColor: AppColors.error,
-        ),
+        const SnackBar(content: Text('Érvénytelen ISBN szám.')),
       );
       return;
     }
@@ -539,7 +329,6 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     _processIsbn(isbn);
   }
 
-  /// Look up ISBN and navigate to detail screen (with offline/unfound fallback)
   Future<void> _processIsbn(String isbn) async {
     if (_isProcessing) return;
 
@@ -547,23 +336,17 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     setState(() => _isProcessing = true);
 
     try {
-      // Pause scanner while processing
       _controller?.stop();
 
-      // Check for duplicate via database (checks both ISBN-10 and ISBN-13)
       final db = ref.read(databaseProvider);
       final existing = await db.getBookByIsbn(isbn);
       if (existing != null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                'A(z) „${existing.title}” már a könyvtáradban van!',
-              ),
-              backgroundColor: AppColors.accent,
+              content: Text('Már a könyvtárban van: ${existing.title}'),
               action: SnackBarAction(
                 label: 'Megnyitás',
-                textColor: AppColors.background,
                 onPressed: () {
                   Navigator.pushReplacement(
                     context,
@@ -581,27 +364,19 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
       }
 
       final book = await ref.read(bookListProvider.notifier).scanAndAdd(isbn);
-
       if (!mounted) return;
 
       if (book != null) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) => BookDetailScreen(book: book),
-          ),
+          MaterialPageRoute(builder: (_) => BookDetailScreen(book: book)),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text(
-              'Nem található online adat ehhez az ISBN-hez. Felveheted kézzel!',
-            ),
-            backgroundColor: AppColors.surfaceLight,
-            duration: const Duration(seconds: 5),
+            content: const Text('Nem található online adat ehhez az ISBN-hez.'),
             action: SnackBarAction(
               label: 'Kézi felvétel',
-              textColor: AppColors.primary,
               onPressed: () => _openManualFallback(isbn: isbn, tabIndex: 1),
             ),
           ),
@@ -613,11 +388,8 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.userMessage),
-            backgroundColor: AppColors.error,
-            duration: const Duration(seconds: 5),
             action: SnackBarAction(
               label: 'Kézi felvétel',
-              textColor: Colors.white,
               onPressed: () => _openManualFallback(isbn: isbn, tabIndex: 1),
             ),
           ),
@@ -627,17 +399,12 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Váratlan hiba történt a könyv keresése közben.'),
-            backgroundColor: AppColors.error,
-          ),
+          const SnackBar(content: Text('Hiba történt a keresés közben.')),
         );
         _controller?.start();
       }
     } finally {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-      }
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 }
