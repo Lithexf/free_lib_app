@@ -210,20 +210,29 @@ class BookCard extends StatelessWidget {
     return Container(
       color: AppColors.surfaceLight,
       alignment: Alignment.center,
-      padding: const EdgeInsets.all(6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.book, color: AppColors.textMuted, size: 24),
-          const SizedBox(height: 4),
-          Text(
-            book.title,
-            style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+      padding: const EdgeInsets.all(4),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.book, color: AppColors.textMuted, size: 22),
+            if (isGridView) ...[
+              const SizedBox(height: 4),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 110),
+                child: Text(
+                  book.title,
+                  style:
+                      const TextStyle(color: AppColors.textMuted, fontSize: 10),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<title>FreeLib — APK Bundle Méret Hőtérkép (Treemap Visualizer)</title>
+<style>
+  body { background: #121212; color: #eee; font-family: 'Segoe UI', sans-serif; margin: 24px; }
+  h1 { color: #64b5f6; margin-bottom: 4px; }
+  p { color: #b0b0b0; margin-top: 0; }
+  .treemap { display: flex; width: 100%; height: 520px; gap: 6px; background: #1a1a1a; padding: 8px; border-radius: 8px; border: 1px solid #333; box-sizing: border-box; }
+  .col { display: flex; flex-direction: column; gap: 6px; }
+  .box { border-radius: 6px; padding: 12px; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid rgba(255,255,255,0.12); transition: opacity 0.15s; }
+  .box:hover { opacity: 0.9; border-color: #fff; }
+  .title { font-weight: 700; font-size: 14px; }
+  .sub { font-size: 12px; opacity: 0.85; }
+  .val { font-size: 18px; font-weight: 700; }
+</style>
+</head>
+<body>
+  <h1>FreeLib_latest.apk — Bundle Analyzer Treemap Hőtérkép (74.0 MiB / 75 730 KB)</h1>
+  <p>A blokkok területe arányos a végleges kiadási APK-ban elfoglalt tömörített mérettel (Fat APK: arm64-v8a, armeabi-v7a, x86_64).</p>
+  <div class="treemap">
+    <!-- 1. Flutter Engine (libflutter.so) 43.1% -->
+    <div class="col" style="flex: 43.1;">
+      <div class="box" style="flex: 39.0; background: #1e4d7b;">
+        <div><div class="title">lib/x86_64/libflutter.so</div><div class="sub">Flutter Engine (x86_64 emulátor/PC)</div></div>
+        <div class="val">12 745.5 KB (16.8%)</div>
+      </div>
+      <div class="box" style="flex: 35.1; background: #255f96;">
+        <div><div class="title">lib/arm64-v8a/libflutter.so</div><div class="sub">Flutter Engine (Modern 64 bites Android telefonok)</div></div>
+        <div class="val">11 472.5 KB (15.2%)</div>
+      </div>
+      <div class="box" style="flex: 25.9; background: #2c70b0;">
+        <div><div class="title">lib/armeabi-v7a/libflutter.so</div><div class="sub">Flutter Engine (32 bites régebbi Android)</div></div>
+        <div class="val">8 414.0 KB (11.1%)</div>
+      </div>
+    </div>
+    <!-- 2. Saját AOT Dart Kód (libapp.so) 28.9% -->
+    <div class="col" style="flex: 28.9;">
+      <div class="box" style="flex: 35.3; background: #1b5e57;">
+        <div><div class="title">lib/armeabi-v7a/libapp.so</div><div class="sub">FreeLib + csomagok AOT gépi kód (32-bit)</div></div>
+        <div class="val">7 728.6 KB (10.2%)</div>
+      </div>
+      <div class="box" style="flex: 32.8; background: #24756c;">
+        <div><div class="title">lib/x86_64/libapp.so</div><div class="sub">FreeLib + csomagok AOT gépi kód (x86_64)</div></div>
+        <div class="val">7 168.9 KB (9.5%)</div>
+      </div>
+      <div class="box" style="flex: 31.9; background: #2d8c82;">
+        <div><div class="title">lib/arm64-v8a/libapp.so</div><div class="sub">FreeLib + csomagok AOT gépi kód (arm64)</div></div>
+        <div class="val">6 976.9 KB (9.2%)</div>
+      </div>
+    </div>
+    <!-- 3. ML Kit Natív Vonalkód-motor (libbarhopper_v3.so + TFLite) 19.3% -->
+    <div class="col" style="flex: 19.3;">
+      <div class="box" style="flex: 39.4; background: #5e3570;">
+        <div><div class="title">lib/x86_64/libbarhopper_v3.so</div><div class="sub">ML Kit Barhopper natív dekóder</div></div>
+        <div class="val">5 770.8 KB (7.6%)</div>
+      </div>
+      <div class="box" style="flex: 33.0; background: #704085;">
+        <div><div class="title">lib/arm64-v8a/libbarhopper_v3.so</div><div class="sub">ML Kit Barhopper natív dekóder (arm64)</div></div>
+        <div class="val">4 830.8 KB (6.4%)</div>
+      </div>
+      <div class="box" style="flex: 21.6; background: #834b9c;">
+        <div><div class="title">lib/armeabi-v7a/libbarhopper_v3.so</div><div class="sub">ML Kit Barhopper (32-bit)</div></div>
+        <div class="val">3 168.4 KB (4.2%)</div>
+      </div>
+      <div class="box" style="flex: 6.0; background: #9657b2;">
+        <div><div class="title">assets/mlkit_barcode_models/*.tflite</div><div class="sub">Beágyazott neurális háló modellek</div></div>
+        <div class="val">860.3 KB (1.1%)</div>
+      </div>
+    </div>
+    <!-- 4. DEX + Assets + Resources 8.7% -->
+    <div class="col" style="flex: 8.7;">
+      <div class="box" style="flex: 67.0; background: #8c5828;">
+        <div><div class="title">classes.dex + classes2.dex</div><div class="sub">Android/Kotlin/Plugin bájtkód</div></div>
+        <div class="val">4 418.0 KB (5.8%)</div>
+      </div>
+      <div class="box" style="flex: 18.0; background: #9e6530;">
+        <div><div class="title">res/ + resources.arsc</div><div class="sub">Adaptív ikonok (icon.png) és XML-ek</div></div>
+        <div class="val">1 120.4 KB (1.5%)</div>
+      </div>
+      <div class="box" style="flex: 15.0; background: #b07238;">
+        <div><div class="title">flutter_assets + META-INF</div><div class="sub">Ikonok, betűtípusok, APK aláírás</div></div>
+        <div class="val">1 054.9 KB (1.4%)</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
