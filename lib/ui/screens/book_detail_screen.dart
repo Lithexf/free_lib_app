@@ -7,12 +7,13 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../data/models/book.dart';
 import '../../data/models/reading_status.dart';
+import '../../data/services/app_exceptions.dart';
 import '../../providers/book_providers.dart';
 import '../../ui/theme/app_colors.dart';
+import 'add_book_screen.dart';
 
-/// Book detail screen for viewing, editing, rating, and managing a book.
-///
-/// Supports both "newly scanned" books and existing library books.
+/// Book detail screen for viewing, editing, rating, tracking reading progress,
+/// and managing a book in the user's library.
 class BookDetailScreen extends ConsumerStatefulWidget {
   final Book book;
 
@@ -26,16 +27,27 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
   late Book _book;
   late ReadingStatus _selectedStatus;
   late double _rating;
+  late int _currentPage;
   late TextEditingController _notesController;
   bool _hasChanges = false;
 
   @override
   void initState() {
     super.initState();
-    _book = widget.book;
-    _selectedStatus = ReadingStatus.fromString(_book.status);
-    _rating = _book.rating ?? 0.0;
+    _syncFromBook(widget.book);
     _notesController = TextEditingController(text: _book.notes ?? '');
+  }
+
+  void _syncFromBook(Book book) {
+    _book = book;
+    _selectedStatus = ReadingStatus.fromString(book.status);
+    _rating = book.rating ?? 0.0;
+    final total = book.pageCount ?? 0;
+    if (book.status == ReadingStatus.completed.name && total > 0) {
+      _currentPage = total;
+    } else {
+      _currentPage = (book.currentPage ?? 0).clamp(0, total > 0 ? total : 999999);
+    }
   }
 
   @override
@@ -44,17 +56,26 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
     super.dispose();
   }
 
+  String _formatDate(DateTime date) {
+    try {
+      return DateFormat.yMMMd('hu').format(date);
+    } catch (_) {
+      return DateFormat('yyyy. MM. dd.').format(date);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
+        final navigator = Navigator.of(context);
         if (_hasChanges) {
-          await _saveChanges();
+          await _saveChanges(silent: true);
         }
         if (mounted) {
-          Navigator.pop(context);
+          navigator.pop();
         }
       },
       child: Scaffold(
@@ -62,7 +83,15 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
         body: CustomScrollView(
           slivers: [
             _buildSliverAppBar(),
-            SliverToBoxAdapter(child: _buildBody()),
+            SliverToBoxAdapter(
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 840),
+                  child: _buildBody(),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -71,10 +100,11 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
 
   Widget _buildSliverAppBar() {
     return SliverAppBar(
-      expandedHeight: 320,
+      expandedHeight: 300,
       pinned: true,
       backgroundColor: AppColors.background,
       leading: IconButton(
+        tooltip: 'Vissza',
         icon: Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
@@ -84,14 +114,29 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
           child: const Icon(Icons.arrow_back_rounded, size: 20),
         ),
         onPressed: () async {
+          final navigator = Navigator.of(context);
           if (_hasChanges) {
-            await _saveChanges();
+            await _saveChanges(silent: true);
           }
-          if (mounted) Navigator.pop(context);
+          if (mounted) navigator.pop();
         },
       ),
       actions: [
+        if (_book.id != null)
+          IconButton(
+            tooltip: 'Adatok szerkesztése',
+            icon: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppColors.background.withValues(alpha: 0.6),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.edit_outlined, size: 20),
+            ),
+            onPressed: _editBookMetadata,
+          ),
         IconButton(
+          tooltip: 'Megosztás',
           icon: Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
@@ -104,14 +149,18 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
         ),
         if (_book.id != null)
           IconButton(
+            tooltip: 'Könyv törlése',
             icon: Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: AppColors.background.withValues(alpha: 0.6),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.delete_outline_rounded,
-                  size: 20, color: AppColors.error),
+              child: const Icon(
+                Icons.delete_outline_rounded,
+                size: 20,
+                color: AppColors.error,
+              ),
             ),
             onPressed: _confirmDelete,
           ),
@@ -122,7 +171,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
           fit: StackFit.expand,
           children: [
             // Blurred background cover
-            if (_book.coverUrl != null)
+            if (_book.coverUrl != null && _book.coverUrl!.isNotEmpty)
               CachedNetworkImage(
                 imageUrl: _book.coverUrl!,
                 fit: BoxFit.cover,
@@ -150,7 +199,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
             // Cover image centered
             Center(
               child: Padding(
-                padding: const EdgeInsets.only(top: 60, bottom: 20),
+                padding: const EdgeInsets.only(top: 56, bottom: 16),
                 child: Hero(
                   tag: 'book-cover-${_book.isbn}',
                   child: Container(
@@ -166,10 +215,11 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: _book.coverUrl != null
+                      child: _book.coverUrl != null &&
+                              _book.coverUrl!.isNotEmpty
                           ? CachedNetworkImage(
                               imageUrl: _book.coverUrl!,
-                              height: 200,
+                              height: 190,
                               fit: BoxFit.cover,
                               errorWidget: (context, url, error) =>
                                   _buildCoverPlaceholder(),
@@ -188,8 +238,8 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
 
   Widget _buildCoverPlaceholder() {
     return Container(
-      width: 140,
-      height: 200,
+      width: 135,
+      height: 190,
       color: AppColors.surfaceLight,
       child: const Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -257,7 +307,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
             Text(
               'Szerző: ${_book.authors}',
               style: const TextStyle(
-                color: AppColors.secondary,
+                color: AppColors.secondaryLight,
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
               ),
@@ -271,84 +321,6 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
               ),
             ),
           const SizedBox(height: 20),
-
-          // ── Rating Section ──
-          _buildSection(
-            'Értékelések',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // User's personal rating
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.surfaceBorder),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.person_rounded,
-                            color: AppColors.primary,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Saját értékelés',
-                            style: TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const Spacer(),
-                          if (_rating > 0)
-                            Text(
-                              _rating.toStringAsFixed(1),
-                              style: const TextStyle(
-                                color: AppColors.primary,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      RatingBar.builder(
-                        initialRating: _rating,
-                        minRating: 0,
-                        direction: Axis.horizontal,
-                        allowHalfRating: true,
-                        itemCount: 5,
-                        itemSize: 36,
-                        unratedColor: AppColors.surfaceLight,
-                        glowColor: AppColors.primary.withValues(alpha: 0.3),
-                        itemBuilder: (context, _) => const Icon(
-                          Icons.star_rounded,
-                          color: AppColors.primary,
-                        ),
-                        onRatingUpdate: (rating) {
-                          setState(() {
-                            _rating = rating;
-                            _hasChanges = true;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Community / External rating
-                _buildCommunityRatingCard(),
-              ],
-            ),
-          ),
 
           // ── Reading Status Section ──
           _buildSection(
@@ -384,6 +356,111 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
             ),
           ),
 
+          // ── Reading Progress Section ──
+          _buildSection(
+            'Olvasási haladás',
+            child: _buildProgressCard(),
+          ),
+
+          // ── Rating Section ──
+          _buildSection(
+            'Értékelések',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // User's personal rating
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.surfaceBorder),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.person_rounded,
+                            color: AppColors.primary,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Saját értékelés',
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          if (_rating > 0) ...[
+                            Text(
+                              _rating.toStringAsFixed(1),
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              tooltip: 'Értékelés törlése',
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(
+                                Icons.restart_alt_rounded,
+                                size: 18,
+                                color: AppColors.textMuted,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _rating = 0.0;
+                                  _hasChanges = true;
+                                });
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      KeyedSubtree(
+                        key: ValueKey(_rating == 0.0 ? 'unrated' : 'rated'),
+                        child: RatingBar.builder(
+                          initialRating: _rating,
+                          minRating: 0,
+                          direction: Axis.horizontal,
+                          allowHalfRating: true,
+                          itemCount: 5,
+                          itemSize: 36,
+                          unratedColor: AppColors.surfaceLight,
+                          glowColor: AppColors.primary.withValues(alpha: 0.3),
+                          itemBuilder: (context, _) => const Icon(
+                            Icons.star_rounded,
+                            color: AppColors.primary,
+                          ),
+                          onRatingUpdate: (rating) {
+                            setState(() {
+                              _rating = rating;
+                              _hasChanges = true;
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Community / External rating
+                _buildCommunityRatingCard(),
+              ],
+            ),
+          ),
+
           // ── Metadata Section ──
           _buildSection(
             'Részletek',
@@ -396,33 +473,34 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
               ),
               child: Column(
                 children: [
-                  _buildMetaRow('ISBN', _book.isbn),
+                  _buildMetaRow(
+                    'ISBN',
+                    _book.isManualIsbn ? 'Kézi rögzítés (nincs ISBN)' : _book.isbn,
+                  ),
                   if (_book.publisher != null)
                     _buildMetaRow('Kiadó', _book.publisher!),
                   if (_book.publishedDate != null)
                     _buildMetaRow('Kiadva', _book.publishedDate!),
                   if (_book.pageCount != null)
-                    _buildMetaRow('Oldalszám', '${_book.pageCount}'),
+                    _buildMetaRow('Oldalszám', '${_book.pageCount} oldal'),
                   if (_book.categories != null)
                     _buildMetaRow('Kategóriák', _book.categories!),
-                  _buildMetaRow('Hozzáadva',
-                      DateFormat.yMMMd().format(_book.dateAdded)),
+                  _buildMetaRow('Hozzáadva', _formatDate(_book.dateAdded)),
                   if (_book.dateStarted != null)
-                    _buildMetaRow('Elkezdve',
-                        DateFormat.yMMMd().format(_book.dateStarted!)),
+                    _buildMetaRow('Elkezdve', _formatDate(_book.dateStarted!)),
                   if (_book.dateFinished != null)
-                    _buildMetaRow('Befejezve',
-                        DateFormat.yMMMd().format(_book.dateFinished!)),
+                    _buildMetaRow('Befejezve', _formatDate(_book.dateFinished!)),
                 ],
               ),
             ),
           ),
 
           // ── Description Section ──
-          if (_book.description != null)
+          if (_book.description != null && _book.description!.trim().isNotEmpty)
             _buildSection(
               'Leírás',
               child: Container(
+                width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
@@ -451,26 +529,30 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                 fontSize: 14,
               ),
               decoration: const InputDecoration(
-                hintText: 'Írd le a gondolataidat erről a könyvről...',
+                hintText: 'Írd le a gondolataidat, kedvenc idézeteidet...',
               ),
               onChanged: (_) => setState(() => _hasChanges = true),
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
 
           // Save button
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _hasChanges ? _saveChanges : null,
+            child: ElevatedButton.icon(
+              onPressed: _hasChanges ? () => _saveChanges() : null,
+              icon: const Icon(Icons.check_rounded),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 disabledBackgroundColor: AppColors.surfaceLight,
               ),
-              child: Text(
-                _book.id == null ? 'Hozzáadás a könyvtárhoz' : 'Változtatások mentése',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              label: Text(
+                _book.id == null
+                    ? 'Hozzáadás a könyvtárhoz'
+                    : 'Változtatások mentése',
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -478,6 +560,159 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildProgressCard() {
+    final totalPages = _book.pageCount;
+    if (totalPages == null || totalPages <= 0) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.surfaceBorder),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.menu_book_outlined,
+              color: AppColors.textMuted,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Add meg a könyv oldalszámát az olvasási haladás követéséhez.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ),
+            if (_book.id != null)
+              TextButton(
+                onPressed: _editBookMetadata,
+                child: const Text('Beállítás'),
+              ),
+          ],
+        ),
+      );
+    }
+
+    final clampedCurrent = _currentPage.clamp(0, totalPages);
+    final pct = (clampedCurrent / totalPages * 100).round();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.surfaceBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.trending_up_rounded,
+                color: AppColors.accent,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$clampedCurrent / $totalPages oldal',
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$pct%',
+                  style: const TextStyle(
+                    color: AppColors.accent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: AppColors.accent,
+              inactiveTrackColor: AppColors.surfaceLight,
+              thumbColor: AppColors.accent,
+              overlayColor: AppColors.accent.withValues(alpha: 0.2),
+            ),
+            child: Slider(
+              value: clampedCurrent.toDouble(),
+              min: 0,
+              max: totalPages.toDouble(),
+              divisions: totalPages,
+              onChanged: (val) => _updateCurrentPage(val.round()),
+            ),
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildPageStepChip('-10 oldal', -10),
+              _buildPageStepChip('+10 oldal', 10),
+              _buildPageStepChip('+25 oldal', 25),
+              ActionChip(
+                avatar: const Icon(
+                  Icons.done_all_rounded,
+                  size: 15,
+                  color: AppColors.primary,
+                ),
+                label: const Text('Végigolvastam'),
+                onPressed: () => _updateCurrentPage(totalPages),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPageStepChip(String label, int delta) {
+    return ActionChip(
+      label: Text(label),
+      onPressed: () => _updateCurrentPage(_currentPage + delta),
+    );
+  }
+
+  void _updateCurrentPage(int newPage) {
+    final total = _book.pageCount ?? 0;
+    if (total <= 0) return;
+
+    final clamped = newPage.clamp(0, total);
+    setState(() {
+      _currentPage = clamped;
+      _hasChanges = true;
+
+      if (clamped >= total) {
+        _selectedStatus = ReadingStatus.completed;
+        _book = _book.copyWith(
+          dateStarted: _book.dateStarted ?? DateTime.now(),
+          dateFinished: _book.dateFinished ?? DateTime.now(),
+        );
+      } else if (clamped > 0 && _selectedStatus == ReadingStatus.planToRead) {
+        _selectedStatus = ReadingStatus.reading;
+        _book = _book.copyWith(
+          dateStarted: _book.dateStarted ?? DateTime.now(),
+        );
+      }
+    });
   }
 
   Widget _buildSection(String title, {required Widget child}) {
@@ -508,7 +743,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 100,
+            width: 105,
             child: Text(
               label,
               style: const TextStyle(
@@ -555,15 +790,16 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                       size: 18,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      'Közösségi értékelés',
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                    const Expanded(
+                      child: Text(
+                        'Közösségi értékelés',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                    const Spacer(),
                     // Source badge
                     if (extSource != null)
                       Container(
@@ -604,11 +840,11 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 4),
                       child: Text(
                         '/ 5',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.textMuted,
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
@@ -632,9 +868,8 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                                 return const Icon(Icons.star_half_rounded,
                                     size: 20, color: AppColors.secondary);
                               } else {
-                                return Icon(Icons.star_rounded,
-                                    size: 20,
-                                    color: AppColors.surfaceLight);
+                                return const Icon(Icons.star_rounded,
+                                    size: 20, color: AppColors.surfaceLight);
                               }
                             }),
                           ),
@@ -682,7 +917,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            _rating == extRating
+                            (_rating - extRating).abs() < 0.05
                                 ? 'Az értékelésed megegyezik a közösségi átlaggal!'
                                 : _rating > extRating
                                     ? 'Az értékelésed ${(_rating - extRating).toStringAsFixed(1)} értékkel magasabb az átlagnál'
@@ -699,24 +934,25 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                 ],
               ],
             )
-          : Row(
+          : const Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.people_rounded,
                   color: AppColors.textMuted,
                   size: 18,
                 ),
-                const SizedBox(width: 8),
-                const Text(
-                  'Közösségi értékelés',
-                  style: TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Közösségi értékelés',
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                const Spacer(),
-                const Text(
+                Text(
                   'Nem elérhető',
                   style: TextStyle(
                     color: AppColors.textMuted,
@@ -742,59 +978,113 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
       _selectedStatus = status;
       _hasChanges = true;
 
-      // Auto-set dates based on status
       if (status == ReadingStatus.reading && _book.dateStarted == null) {
         _book = _book.copyWith(dateStarted: DateTime.now());
       }
-      if (status == ReadingStatus.completed && _book.dateFinished == null) {
-        _book = _book.copyWith(
-          dateFinished: DateTime.now(),
-          dateStarted: _book.dateStarted ?? DateTime.now(),
-        );
+      if (status == ReadingStatus.completed) {
+        if (_book.pageCount != null && _book.pageCount! > 0) {
+          _currentPage = _book.pageCount!;
+        }
+        if (_book.dateFinished == null) {
+          _book = _book.copyWith(
+            dateFinished: DateTime.now(),
+            dateStarted: _book.dateStarted ?? DateTime.now(),
+          );
+        }
       }
     });
   }
 
-  Future<void> _saveChanges() async {
+  Future<void> _editBookMetadata() async {
+    if (_hasChanges) {
+      await _saveChanges(silent: true);
+    }
+    if (!mounted) return;
+    final edited = await Navigator.push<Book>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddBookScreen(bookToEdit: _book),
+      ),
+    );
+    if (edited != null && mounted) {
+      setState(() {
+        _syncFromBook(edited);
+      });
+    }
+  }
+
+  Future<void> _saveChanges({bool silent = false}) async {
+    final wasNew = _book.id == null;
+    final trimmedNotes = _notesController.text.trim();
     final updatedBook = _book.copyWith(
       status: _selectedStatus.name,
-      rating: _rating,
-      notes: _notesController.text.trim().isEmpty
-          ? null
-          : _notesController.text.trim(),
+      rating: _rating > 0 ? _rating : null,
+      currentPage: _book.pageCount != null ? _currentPage : null,
+      notes: trimmedNotes.isEmpty ? null : trimmedNotes,
     );
 
-    final notifier = ref.read(bookListProvider.notifier);
+    try {
+      final notifier = ref.read(bookListProvider.notifier);
+      final Book savedBook;
+      if (wasNew) {
+        savedBook = await notifier.addBook(updatedBook);
+      } else {
+        savedBook = await notifier.updateBook(updatedBook);
+      }
 
-    if (updatedBook.id == null) {
-      await notifier.addBook(updatedBook);
-    } else {
-      await notifier.updateBook(updatedBook);
-    }
+      if (mounted) {
+        setState(() {
+          _book = savedBook;
+          _hasChanges = false;
+        });
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            updatedBook.id == null
-                ? '${updatedBook.title} hozzáadva a könyvtárhoz!'
-                : 'Változtatások elmentve!',
+        if (!silent) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                wasNew
+                    ? '„${savedBook.title}” hozzáadva a könyvtárhoz!'
+                    : 'Változtatások elmentve!',
+              ),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+      }
+    } on AppException catch (e) {
+      if (mounted && !silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.userMessage),
+            backgroundColor: AppColors.error,
           ),
-          backgroundColor: AppColors.success,
-        ),
-      );
-      setState(() => _hasChanges = false);
+        );
+      }
+    } catch (_) {
+      if (mounted && !silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nem sikerült elmenteni a módosításokat.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 
   void _shareBook() {
     final text = StringBuffer()
       ..writeln('📖 ${_book.title}')
-      ..writeln('by ${_book.authors ?? "Unknown Author"}')
-      ..writeln('ISBN: ${_book.isbn}');
+      ..writeln('Szerző: ${_book.authors ?? "Ismeretlen szerző"}');
 
+    if (!_book.isManualIsbn) {
+      text.writeln('ISBN: ${_book.isbn}');
+    }
     if (_rating > 0) {
-      text.writeln('⭐ ${_rating.toStringAsFixed(1)}/5.0');
+      text.writeln('⭐ Saját értékelés: ${_rating.toStringAsFixed(1)} / 5.0');
+    }
+    if (_book.pageCount != null && _currentPage > 0) {
+      text.writeln('📑 Haladás: $_currentPage / ${_book.pageCount} oldal');
     }
     text.writeln('Állapot: ${_selectedStatus.label}');
 
@@ -804,33 +1094,47 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
   void _confirmDelete() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text(
           'Könyv törlése',
           style: TextStyle(color: AppColors.textPrimary),
         ),
         content: Text(
-          'Törlöd a(z) "${_book.title}" című könyvet a könyvtáradból? Ez a művelet nem vonható vissza.',
+          'Törlöd a(z) „${_book.title}” című könyvet a könyvtáradból? Ez a művelet nem vonható vissza.',
           style: const TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Mégse'),
           ),
           TextButton(
             onPressed: () async {
-              final navigator = Navigator.of(context);
-              navigator.pop(); // Close dialog
-              if (_book.id != null) {
-                await ref
-                    .read(bookListProvider.notifier)
-                    .deleteBook(_book.id!);
-              }
-              if (mounted) {
-                _hasChanges = false; // Prevent auto-save on pop
-                navigator.pop(); // Close detail screen
+              final dialogNav = Navigator.of(dialogContext);
+              final pageNav = Navigator.of(context);
+              final messenger = ScaffoldMessenger.of(context);
+              dialogNav.pop(); // Close dialog
+
+              try {
+                if (_book.id != null) {
+                  await ref
+                      .read(bookListProvider.notifier)
+                      .deleteBook(_book.id!);
+                }
+                if (mounted) {
+                  _hasChanges = false;
+                  pageNav.pop(); // Close detail screen
+                }
+              } on AppException catch (e) {
+                if (mounted) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(e.userMessage),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
               }
             },
             child: const Text(

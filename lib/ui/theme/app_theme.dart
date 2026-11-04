@@ -40,6 +40,20 @@ class AppTheme {
         ),
       ),
 
+      // ── Material 3 NavigationBar ──
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: AppColors.surface,
+        indicatorColor: AppColors.primary.withValues(alpha: 0.16),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final isSelected = states.contains(WidgetState.selected);
+          return GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            color: isSelected ? AppColors.primary : AppColors.textMuted,
+          );
+        }),
+      ),
+
       // ── Bottom Navigation ──
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: AppColors.surface,
@@ -106,7 +120,16 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.primary, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.error, width: 2),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
 
       // ── Elevated buttons ──
@@ -121,6 +144,22 @@ class AppTheme {
           ),
           textStyle: GoogleFonts.inter(
             fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+
+      // ── Outlined buttons ──
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.textPrimary,
+          side: const BorderSide(color: AppColors.surfaceBorder),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: GoogleFonts.inter(
+            fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
         ),

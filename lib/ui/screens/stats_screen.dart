@@ -1,11 +1,13 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/reading_status.dart';
 import '../../providers/book_providers.dart';
 import '../../ui/theme/app_colors.dart';
 
-/// Statistics dashboard showing reading insights.
+/// Statistics dashboard showing reading insights, annual reading goal,
+/// page count totals, and interactive charts.
 class StatsScreen extends ConsumerWidget {
   const StatsScreen({super.key});
 
@@ -14,107 +16,159 @@ class StatsScreen extends ConsumerWidget {
     final statsAsync = ref.watch(bookStatsProvider);
 
     return SafeArea(
-      child: CustomScrollView(
-        slivers: [
-          // Header
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Statisztika',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1040),
+          child: CustomScrollView(
+            slivers: [
+              // Header
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Statisztika',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Az olvasási utazásod és éves célod egy pillantásra',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Stats content
+              SliverToBoxAdapter(
+                child: statsAsync.when(
+                  loading: () => const Padding(
+                    padding: EdgeInsets.all(60),
+                    child: Center(
+                      child:
+                          CircularProgressIndicator(color: AppColors.primary),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Az olvasási utazásod egy pillantásra',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 14,
+                  error: (error, _) => Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.error_outline_rounded,
+                            color: AppColors.error,
+                            size: 42,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Hiba a statisztika betöltésekor:\n$error',
+                            style:
+                                const TextStyle(color: AppColors.textSecondary),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () => ref.invalidate(bookStatsProvider),
+                            child: const Text('Újratöltés'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-
-          // Stats content
-          SliverToBoxAdapter(
-            child: statsAsync.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.all(60),
-                child: Center(
-                  child: CircularProgressIndicator(color: AppColors.primary),
+                  data: (stats) => _buildStats(context, ref, stats),
                 ),
-              ),
-              error: (error, _) => Padding(
-                padding: const EdgeInsets.all(40),
-                child: Center(
-                  child: Text(
-                    'Hiba a statisztika betöltésekor',
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
-                ),
-              ),
-              data: (stats) => _buildStats(context, stats),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStats(BuildContext context, BookStats stats) {
-    if (stats.totalCount == 0) {
-      return const Padding(
-        padding: EdgeInsets.all(60),
-        child: Center(
-          child: Column(
-            children: [
-              Icon(Icons.bar_chart_rounded,
-                  size: 64, color: AppColors.textMuted),
-              SizedBox(height: 16),
-              Text(
-                'Még nincs statisztika',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Adj hozzá néhány könyvet, hogy lásd az olvasási statisztikáidat!',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                textAlign: TextAlign.center,
               ),
             ],
           ),
         ),
-      );
-    }
+      ),
+    );
+  }
 
+  Widget _buildStats(BuildContext context, WidgetRef ref, BookStats stats) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          // Quick stats cards
-          _buildQuickStats(stats),
+          // Interactive Yearly Reading Goal card (always accessible!)
+          _buildYearlyGoalCard(context, ref, stats),
           const SizedBox(height: 20),
 
-          // Status distribution
-          _buildStatusChart(stats),
-          const SizedBox(height: 20),
+          if (stats.totalCount == 0)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.bar_chart_rounded,
+                    size: 60,
+                    color: AppColors.textMuted,
+                  ),
+                  SizedBox(height: 14),
+                  Text(
+                    'Még nincsenek részletes grafikonok',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Adj hozzá könyveket vonalkód-szkenneléssel vagy kereséssel, hogy megjelenjenek a részletes eloszlások!',
+                    style:
+                        TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            )
+          else ...[
+            // Responsive quick stats grid
+            _buildQuickStats(stats),
+            const SizedBox(height: 20),
 
-          // Books added over time
-          if (stats.booksAddedPerMonth.isNotEmpty)
-            _buildTimelineChart(stats),
+            // Responsive Charts (2 columns on wide tablets/landscape, stacked on phones)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 680 &&
+                    stats.booksAddedPerMonth.isNotEmpty;
+                if (isWide) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: _buildStatusChart(stats)),
+                      const SizedBox(width: 16),
+                      Expanded(child: _buildTimelineChart(stats)),
+                    ],
+                  );
+                }
+
+                return Column(
+                  children: [
+                    _buildStatusChart(stats),
+                    if (stats.booksAddedPerMonth.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      _buildTimelineChart(stats),
+                    ],
+                  ],
+                );
+              },
+            ),
+          ],
 
           const SizedBox(height: 40),
         ],
@@ -122,74 +176,254 @@ class StatsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildQuickStats(BookStats stats) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildStatCard(
-                icon: Icons.library_books_rounded,
-                iconColor: AppColors.secondary,
-                label: 'Összes könyv',
-                value: '${stats.totalCount}',
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildStatCard(
-                icon: Icons.star_rounded,
-                iconColor: AppColors.primary,
-                label: 'Átlag értékelés',
-                value: stats.averageRating > 0
-                    ? stats.averageRating.toStringAsFixed(1)
-                    : '—',
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildStatCard(
-                icon: ReadingStatus.completed.icon,
-                iconColor: ReadingStatus.completed.color,
-                label: 'Olvasott',
-                value: '${stats.countByStatus['completed'] ?? 0}',
-              ),
-            ),
+  Widget _buildYearlyGoalCard(
+    BuildContext context,
+    WidgetRef ref,
+    BookStats stats,
+  ) {
+    final year = DateTime.now().year;
+    final completed = stats.completedThisYear;
+    final goal = stats.yearlyGoal > 0 ? stats.yearlyGoal : 12;
+    final progress = (completed / goal).clamp(0.0, 1.0);
+    final pct = (progress * 100).round();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.secondary.withValues(alpha: 0.16),
+            AppColors.primary.withValues(alpha: 0.10),
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildStatCard(
-                icon: ReadingStatus.reading.icon,
-                iconColor: ReadingStatus.reading.color,
-                label: 'Olvasom',
-                value: '${stats.countByStatus['reading'] ?? 0}',
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildStatCard(
-                icon: ReadingStatus.planToRead.icon,
-                iconColor: ReadingStatus.planToRead.color,
-                label: 'Tervezett',
-                value: '${stats.countByStatus['planToRead'] ?? 0}',
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildStatCard(
-                icon: ReadingStatus.dropped.icon,
-                iconColor: ReadingStatus.dropped.color,
-                label: 'Abbahagyott',
-                value: '${stats.countByStatus['dropped'] ?? 0}',
-              ),
-            ),
-          ],
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: AppColors.secondary.withValues(alpha: 0.35),
         ),
-      ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.emoji_events_rounded,
+                  color: AppColors.primary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$year-as olvasási kihívás',
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      completed >= goal
+                          ? 'Gratulálunk! Teljesítetted az idei célodat!'
+                          : '$completed / $goal könyv elolvasva idén ($pct%)',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => _showEditGoalDialog(context, ref, goal),
+                icon: const Icon(Icons.tune_rounded, size: 16),
+                label: const Text('Cél'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 10,
+              backgroundColor: AppColors.surface,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                completed >= goal ? AppColors.accent : AppColors.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
+  }
+
+  void _showEditGoalDialog(
+    BuildContext context,
+    WidgetRef ref,
+    int currentGoal,
+  ) {
+    final controller = TextEditingController(text: '$currentGoal');
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text(
+            'Éves olvasási cél beállítása',
+            style: TextStyle(color: AppColors.textPrimary, fontSize: 18),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Hány könyvet szeretnél elolvasni ebben az évben?',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: const InputDecoration(
+                  hintText: 'pl. 12',
+                  suffixText: 'könyv',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Mégse'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final val = int.tryParse(controller.text.trim());
+                if (val != null && val > 0) {
+                  await ref.read(yearlyGoalProvider.notifier).updateGoal(val);
+                }
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
+              },
+              child: const Text('Mentés'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildQuickStats(BookStats stats) {
+    final items = <_StatItem>[
+      _StatItem(
+        icon: Icons.library_books_rounded,
+        color: AppColors.secondary,
+        label: 'Összes könyv',
+        value: '${stats.totalCount}',
+      ),
+      _StatItem(
+        icon: Icons.menu_book_rounded,
+        color: AppColors.accent,
+        label: 'Olvasott oldal',
+        value: _formatCompactNumber(stats.totalPagesRead),
+      ),
+      _StatItem(
+        icon: Icons.star_rounded,
+        color: AppColors.primary,
+        label: 'Átlag értékelés',
+        value: stats.averageRating > 0
+            ? stats.averageRating.toStringAsFixed(1)
+            : '—',
+      ),
+      _StatItem(
+        icon: ReadingStatus.completed.icon,
+        color: ReadingStatus.completed.color,
+        label: ReadingStatus.completed.label,
+        value: '${stats.countByStatus['completed'] ?? 0}',
+      ),
+      _StatItem(
+        icon: ReadingStatus.reading.icon,
+        color: ReadingStatus.reading.color,
+        label: ReadingStatus.reading.label,
+        value: '${stats.countByStatus['reading'] ?? 0}',
+      ),
+      _StatItem(
+        icon: ReadingStatus.planToRead.icon,
+        color: ReadingStatus.planToRead.color,
+        label: ReadingStatus.planToRead.label,
+        value: '${stats.countByStatus['planToRead'] ?? 0}',
+      ),
+      _StatItem(
+        icon: ReadingStatus.onHold.icon,
+        color: ReadingStatus.onHold.color,
+        label: ReadingStatus.onHold.label,
+        value: '${stats.countByStatus['onHold'] ?? 0}',
+      ),
+      _StatItem(
+        icon: ReadingStatus.dropped.icon,
+        color: ReadingStatus.dropped.color,
+        label: ReadingStatus.dropped.label,
+        value: '${stats.countByStatus['dropped'] ?? 0}',
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth < 380
+            ? 2
+            : constraints.maxWidth < 680
+                ? 2
+                : 4;
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            mainAxisExtent: 108,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return _buildStatCard(
+              icon: item.icon,
+              iconColor: item.color,
+              label: item.label,
+              value: item.value,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _formatCompactNumber(int n) {
+    if (n >= 10000) {
+      return '${(n / 1000).toStringAsFixed(1)}k';
+    }
+    return '$n';
   }
 
   Widget _buildStatCard({
@@ -199,39 +433,51 @@ class StatsScreen extends ConsumerWidget {
     required String value,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.surfaceBorder),
       ),
-      child: Column(
+      child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+              color: iconColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: iconColor, size: 22),
           ),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.textMuted,
-              fontSize: 11,
-            ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -256,7 +502,7 @@ class StatsScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Állapot szerint',
+            'Eloszlás állapot szerint',
             style: TextStyle(
               color: AppColors.textPrimary,
               fontSize: 16,
@@ -332,7 +578,8 @@ class StatsScreen extends ConsumerWidget {
 
     final maxCount = data.fold<int>(
       0,
-      (max, entry) => (entry['count'] as int) > max ? (entry['count'] as int) : max,
+      (max, entry) =>
+          (entry['count'] as int) > max ? (entry['count'] as int) : max,
     );
 
     return Container(
@@ -346,7 +593,7 @@ class StatsScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Idővel hozzáadott könyvek',
+            'Havi gyarapodás (utolsó 12 hónap)',
             style: TextStyle(
               color: AppColors.textPrimary,
               fontSize: 16,
@@ -392,8 +639,10 @@ class StatsScreen extends ConsumerWidget {
                         if (index < 0 || index >= data.length) {
                           return const SizedBox.shrink();
                         }
-                        final month =
-                            (data[index]['month'] as String).substring(5);
+                        final monthStr = data[index]['month'] as String;
+                        final month = monthStr.length >= 7
+                            ? monthStr.substring(5)
+                            : monthStr;
                         return Padding(
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(
@@ -436,4 +685,18 @@ class StatsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _StatItem {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String value;
+
+  const _StatItem({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.value,
+  });
 }

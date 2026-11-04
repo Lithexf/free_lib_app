@@ -5,9 +5,32 @@ import '../theme/app_colors.dart';
 /// Custom scanner overlay with animated scan window.
 ///
 /// Draws a semi-transparent dark background with a clear scanning window,
-/// animated border, and instruction text positioned above the window.
-class ScanOverlay extends StatelessWidget {
+/// animated border and laser line, and instruction text positioned above the window.
+class ScanOverlay extends StatefulWidget {
   const ScanOverlay({super.key});
+
+  @override
+  State<ScanOverlay> createState() => _ScanOverlayState();
+}
+
+class _ScanOverlayState extends State<ScanOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,21 +38,31 @@ class ScanOverlay extends StatelessWidget {
       builder: (context, constraints) {
         // Square scan window — responsive to screen size
         // Use the smaller of width*0.65 or height*0.35 to ensure it fits
-        final scanSize = min(constraints.maxWidth * 0.65, constraints.maxHeight * 0.35);
+        final scanSize =
+            min(constraints.maxWidth * 0.65, constraints.maxHeight * 0.35);
 
         // Center the scan window vertically, shifted slightly up to leave room
         // for the bottom bar (manual ISBN entry)
         final left = (constraints.maxWidth - scanSize) / 2;
-        final top = (constraints.maxHeight - scanSize) / 2 - constraints.maxHeight * 0.08;
+        final top = max(
+          16.0,
+          (constraints.maxHeight - scanSize) / 2 - constraints.maxHeight * 0.08,
+        );
 
-        return CustomPaint(
-          size: Size(constraints.maxWidth, constraints.maxHeight),
-          painter: _ScanOverlayPainter(
-            animationValue: 0.5,
-            scanLeft: left,
-            scanTop: top,
-            scanSize: scanSize,
-          ),
+        return AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return CustomPaint(
+              size: Size(constraints.maxWidth, constraints.maxHeight),
+              painter: _ScanOverlayPainter(
+                animationValue: Curves.easeInOut.transform(_controller.value),
+                scanLeft: left,
+                scanTop: top,
+                scanSize: scanSize,
+              ),
+              child: child,
+            );
+          },
           child: _buildInstructionText(top),
         );
       },
@@ -37,16 +70,19 @@ class ScanOverlay extends StatelessWidget {
   }
 
   Widget _buildInstructionText(double scanTop) {
+    if (scanTop < 90) {
+      return const SizedBox.shrink();
+    }
     return SafeArea(
       child: Column(
         children: [
           // Position the text above the scan window
-          SizedBox(height: max(scanTop - 50, 60)),
+          SizedBox(height: max(scanTop - 56, 48)),
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 32),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             decoration: BoxDecoration(
-              color: AppColors.background.withValues(alpha: 0.7),
+              color: AppColors.background.withValues(alpha: 0.72),
               borderRadius: BorderRadius.circular(24),
               border: Border.all(
                 color: AppColors.glassBorder,
@@ -56,9 +92,10 @@ class ScanOverlay extends StatelessWidget {
               'Igazítsd a vonalkódot a keretbe',
               style: TextStyle(
                 color: AppColors.textPrimary,
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
+              textAlign: TextAlign.center,
             ),
           ),
           const Spacer(),
@@ -104,39 +141,38 @@ class _ScanOverlayPainter extends CustomPainter {
     final borderPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
-      ..color = AppColors.primary
-          .withValues(alpha: 0.5 + 0.5 * animationValue);
+      ..color =
+          AppColors.primary.withValues(alpha: 0.45 + 0.45 * animationValue);
 
     canvas.drawRRect(scanRect, borderPaint);
 
     // Draw corner accents
-    _drawCornerAccents(canvas, scanRect, animationValue);
+    _drawCornerAccents(canvas, scanRect);
 
     // Draw scan line
     final scanLineY =
-        scanRect.top + 10 + (scanRect.height - 20) * animationValue;
+        scanRect.top + 12 + (scanRect.height - 24) * animationValue;
     final scanLinePaint = Paint()
       ..shader = LinearGradient(
         colors: [
           AppColors.primary.withValues(alpha: 0.0),
-          AppColors.primary.withValues(alpha: 0.6),
+          AppColors.primary.withValues(alpha: 0.85),
           AppColors.primary.withValues(alpha: 0.0),
         ],
       ).createShader(
-        Rect.fromLTWH(scanLeft + 10, scanLineY, scanSize - 20, 2),
+        Rect.fromLTWH(scanLeft + 10, scanLineY, max(1, scanSize - 20), 2),
       )
-      ..strokeWidth = 2;
+      ..strokeWidth = 2.5;
 
     canvas.drawLine(
-      Offset(scanLeft + 20, scanLineY),
-      Offset(scanLeft + scanSize - 20, scanLineY),
+      Offset(scanLeft + 18, scanLineY),
+      Offset(scanLeft + scanSize - 18, scanLineY),
       scanLinePaint,
     );
   }
 
-  void _drawCornerAccents(
-      Canvas canvas, RRect scanRect, double animationValue) {
-    final cornerLength = 30.0;
+  void _drawCornerAccents(Canvas canvas, RRect scanRect) {
+    final cornerLength = min(30.0, scanSize * 0.2);
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4
@@ -197,8 +233,7 @@ class _ScanOverlayPainter extends CustomPainter {
         ..moveTo(rect.right - r - cornerLength, rect.bottom)
         ..lineTo(rect.right - r, rect.bottom)
         ..arcTo(
-          Rect.fromLTWH(
-              rect.right - r * 2, rect.bottom - r * 2, r * 2, r * 2),
+          Rect.fromLTWH(rect.right - r * 2, rect.bottom - r * 2, r * 2, r * 2),
           pi / 2,
           -pi / 2,
           false,
@@ -211,6 +246,8 @@ class _ScanOverlayPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ScanOverlayPainter oldDelegate) {
     return oldDelegate.animationValue != animationValue ||
-        oldDelegate.scanSize != scanSize;
+        oldDelegate.scanSize != scanSize ||
+        oldDelegate.scanTop != scanTop ||
+        oldDelegate.scanLeft != scanLeft;
   }
 }

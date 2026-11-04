@@ -6,13 +6,14 @@ import '../../providers/book_providers.dart';
 import '../../ui/theme/app_colors.dart';
 import '../widgets/book_card.dart';
 import '../widgets/empty_state.dart';
+import 'add_book_screen.dart';
 import 'book_detail_screen.dart';
 import 'scanner_screen.dart';
 import 'stats_screen.dart';
 
-/// Main library dashboard with bottom navigation.
+/// Main library dashboard with responsive navigation (BottomNav on phones, NavigationRail on wide screens).
 ///
-/// Tabs: Library (book grid), Scanner, Statistics
+/// Views: Library, Add/Discover (Online Search + Manual), Scanner action, Statistics.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -21,6 +22,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  /// Active content tab: 0 = Library, 1 = Add/Discover, 2 = Stats
   int _currentTab = 0;
   bool _isGridView = true;
   bool _isSearching = false;
@@ -32,18 +34,102 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
+  /// Maps 4 UI navigation destinations (Library, Add, Scan, Stats) to actions/tabs.
+  int get _selectedNavIndex {
+    if (_currentTab == 0) return 0;
+    if (_currentTab == 1) return 1;
+    return 3; // Stats is destination index 3 (index 2 is Scanner modal)
+  }
+
+  Future<void> _onSelectDestination(int navIndex) async {
+    if (navIndex == 2) {
+      await _openScanner();
+      return;
+    }
+    final targetTab = navIndex == 3 ? 2 : navIndex;
+    setState(() => _currentTab = targetTab);
+  }
+
+  Future<void> _openScanner() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+    if (mounted) {
+      ref.read(bookListProvider.notifier).refresh();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final useNavigationRail = screenWidth >= 640;
+
+    final bodyStack = IndexedStack(
+      index: _currentTab,
+      children: [
+        _buildLibraryTab(),
+        const AddBookScreen(isEmbedded: true),
+        const StatsScreen(),
+      ],
+    );
+
+    if (useNavigationRail) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: Row(
+          children: [
+            NavigationRail(
+              backgroundColor: AppColors.surface,
+              selectedIndex: _selectedNavIndex,
+              onDestinationSelected: _onSelectDestination,
+              labelType: NavigationRailLabelType.all,
+              indicatorColor: AppColors.primary.withValues(alpha: 0.16),
+              selectedIconTheme: const IconThemeData(color: AppColors.primary),
+              unselectedIconTheme:
+                  const IconThemeData(color: AppColors.textMuted),
+              selectedLabelTextStyle: const TextStyle(
+                color: AppColors.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+              unselectedLabelTextStyle: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+              destinations: const [
+                NavigationRailDestination(
+                  icon: Icon(Icons.library_books_outlined),
+                  selectedIcon: Icon(Icons.library_books_rounded),
+                  label: Text('Könyvtár'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.add_box_outlined),
+                  selectedIcon: Icon(Icons.add_box_rounded),
+                  label: Text('Hozzáadás'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.qr_code_scanner_rounded),
+                  label: Text('Szkenner'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.bar_chart_outlined),
+                  selectedIcon: Icon(Icons.bar_chart_rounded),
+                  label: Text('Statisztika'),
+                ),
+              ],
+            ),
+            const VerticalDivider(width: 1, color: AppColors.surfaceBorder),
+            Expanded(child: bodyStack),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: IndexedStack(
-        index: _currentTab,
-        children: [
-          _buildLibraryTab(),
-          _currentTab == 1 ? const ScannerScreen() : const SizedBox.shrink(),
-          const StatsScreen(),
-        ],
-      ),
+      body: bodyStack,
       bottomNavigationBar: _buildBottomNav(),
     );
   }
@@ -56,85 +142,70 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           top: BorderSide(color: AppColors.surfaceBorder, width: 1),
         ),
       ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(0, Icons.library_books_rounded, 'Könyvtár'),
-              _buildNavItem(1, Icons.qr_code_scanner_rounded, 'Szkennelés'),
-              _buildNavItem(2, Icons.bar_chart_rounded, 'Statisztika'),
-            ],
+      child: NavigationBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        height: 66,
+        selectedIndex: _selectedNavIndex,
+        onDestinationSelected: _onSelectDestination,
+        indicatorColor: AppColors.primary.withValues(alpha: 0.15),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.library_books_outlined, color: AppColors.textMuted),
+            selectedIcon:
+                Icon(Icons.library_books_rounded, color: AppColors.primary),
+            label: 'Könyvtár',
           ),
-        ),
+          NavigationDestination(
+            icon: Icon(Icons.add_box_outlined, color: AppColors.textMuted),
+            selectedIcon: Icon(Icons.add_box_rounded, color: AppColors.primary),
+            label: 'Hozzáadás',
+          ),
+          NavigationDestination(
+            icon:
+                Icon(Icons.qr_code_scanner_rounded, color: AppColors.textMuted),
+            selectedIcon:
+                Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary),
+            label: 'Szkennelés',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bar_chart_outlined, color: AppColors.textMuted),
+            selectedIcon:
+                Icon(Icons.bar_chart_rounded, color: AppColors.primary),
+            label: 'Statisztika',
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final isSelected = _currentTab == index;
-    return GestureDetector(
-      onTap: () async {
-        if (index == 1) {
-          // Open scanner as a full page
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ScannerScreen()),
-          );
-          ref.read(bookListProvider.notifier).refresh();
-          return;
-        }
-        setState(() => _currentTab = index);
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primary.withValues(alpha: 0.1)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? AppColors.primary : AppColors.textMuted,
-              size: 24,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? AppColors.primary : AppColors.textMuted,
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-              ),
-            ),
+  Widget _buildLibraryTab() {
+    final booksAsync = ref.watch(bookListProvider);
+
+    return SafeArea(
+      child: RefreshIndicator(
+        color: AppColors.primary,
+        backgroundColor: AppColors.surface,
+        onRefresh: () => ref.read(bookListProvider.notifier).refresh(),
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(child: _buildAppBar()),
+            SliverToBoxAdapter(child: _buildBookCounter()),
+            SliverToBoxAdapter(child: _buildFilterChips()),
+            ..._buildBookSlivers(booksAsync),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildLibraryTab() {
-    return SafeArea(
-      child: Column(
-        children: [
-          _buildAppBar(),
-          _buildBookCounter(),
-          _buildFilterChips(),
-          Expanded(child: _buildBookList()),
-        ],
-      ),
-    );
-  }
-
   Widget _buildBookCounter() {
-    final bookCount = ref.watch(bookListProvider).valueOrNull?.length ?? 0;
+    final stats = ref.watch(bookStatsProvider).valueOrNull;
+    final totalBooks = stats?.totalCount ?? 0;
+    final readingCount = stats?.countByStatus['reading'] ?? 0;
+    final completedCount = stats?.countByStatus['completed'] ?? 0;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
@@ -189,7 +260,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '$bookCount',
+                    '$totalBooks',
                     style: const TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 28,
@@ -217,14 +288,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 _buildMiniStat(
                   Icons.auto_stories,
                   AppColors.accent,
-                  '${_getStatusCount('reading')}',
+                  '$readingCount',
                   'Olvasom',
                 ),
                 const SizedBox(height: 4),
                 _buildMiniStat(
                   Icons.check_circle_outline,
                   AppColors.primary,
-                  '${_getStatusCount('completed')}',
+                  '$completedCount',
                   'Befejezve',
                 ),
               ],
@@ -235,12 +306,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  int _getStatusCount(String status) {
-    final books = ref.watch(bookListProvider).valueOrNull ?? [];
-    return books.where((b) => b.status == status).length;
-  }
-
-  Widget _buildMiniStat(IconData icon, Color color, String count, String label) {
+  Widget _buildMiniStat(
+    IconData icon,
+    Color color,
+    String count,
+    String label,
+  ) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -272,11 +343,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: Row(
         children: [
           if (!_isSearching) ...[
-            Expanded(
+            const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'FreeLib',
                     style: TextStyle(
                       color: AppColors.primary,
@@ -284,8 +355,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  const Text(
+                  SizedBox(height: 2),
+                  Text(
                     'A te személyes könyvtárad',
                     style: TextStyle(
                       color: AppColors.textSecondary,
@@ -298,6 +369,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             // Search button
             _buildAppBarButton(
               icon: Icons.search_rounded,
+              tooltip: 'Keresés a könyvtárban',
               onPressed: () => setState(() => _isSearching = true),
             ),
             const SizedBox(width: 8),
@@ -306,12 +378,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               icon: _isGridView
                   ? Icons.view_list_rounded
                   : Icons.grid_view_rounded,
+              tooltip: _isGridView ? 'Listanézet' : 'Rácsnézet',
               onPressed: () => setState(() => _isGridView = !_isGridView),
             ),
             const SizedBox(width: 8),
             // Sort
             _buildAppBarButton(
               icon: Icons.sort_rounded,
+              tooltip: 'Rendezés',
               onPressed: _showSortDialog,
             ),
           ] else ...[
@@ -322,7 +396,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 autofocus: true,
                 style: const TextStyle(color: AppColors.textPrimary),
                 decoration: InputDecoration(
-                  hintText: 'Keresés cím vagy szerző alapján...',
+                  hintText: 'Keresés cím, szerző vagy ISBN alapján...',
                   prefixIcon: const Icon(Icons.search_rounded,
                       color: AppColors.textMuted),
                   suffixIcon: IconButton(
@@ -331,7 +405,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     onPressed: () {
                       _searchController.clear();
                       ref.read(searchQueryProvider.notifier).state = '';
-                      ref.read(bookListProvider.notifier).refresh();
                       setState(() => _isSearching = false);
                     },
                   ),
@@ -345,7 +418,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 onChanged: (query) {
                   ref.read(searchQueryProvider.notifier).state = query;
-                  ref.read(bookListProvider.notifier).refresh();
                 },
               ),
             ),
@@ -357,6 +429,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildAppBarButton({
     required IconData icon,
+    required String tooltip,
     required VoidCallback onPressed,
   }) {
     return Container(
@@ -366,6 +439,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         border: Border.all(color: AppColors.surfaceBorder),
       ),
       child: IconButton(
+        tooltip: tooltip,
         icon: Icon(icon, color: AppColors.textSecondary, size: 20),
         onPressed: onPressed,
         constraints: const BoxConstraints(minWidth: 42, minHeight: 42),
@@ -390,7 +464,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               selected: currentFilter == null,
               onSelected: (_) {
                 ref.read(statusFilterProvider.notifier).state = null;
-                ref.read(bookListProvider.notifier).refresh();
               },
               selectedColor: AppColors.primary.withValues(alpha: 0.2),
               checkmarkColor: AppColors.primary,
@@ -398,9 +471,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 color: currentFilter == null
                     ? AppColors.primary
                     : AppColors.textSecondary,
-                fontWeight: currentFilter == null
-                    ? FontWeight.w600
-                    : FontWeight.w500,
+                fontWeight:
+                    currentFilter == null ? FontWeight.w600 : FontWeight.w500,
               ),
               side: BorderSide(
                 color: currentFilter == null
@@ -422,14 +494,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 onSelected: (_) {
                   ref.read(statusFilterProvider.notifier).state =
                       isSelected ? null : status.name;
-                  ref.read(bookListProvider.notifier).refresh();
                 },
                 selectedColor: status.color.withValues(alpha: 0.15),
                 checkmarkColor: status.color,
                 labelStyle: TextStyle(
                   color: isSelected ? status.color : AppColors.textSecondary,
-                  fontWeight:
-                      isSelected ? FontWeight.w600 : FontWeight.w500,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                   fontSize: 13,
                 ),
                 side: BorderSide(
@@ -445,92 +515,157 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildBookList() {
-    final booksAsync = ref.watch(bookListProvider);
+  List<Widget> _buildBookSlivers(AsyncValue<List<Book>> booksAsync) {
+    final activeFilter = ref.watch(statusFilterProvider);
+    final activeQuery = ref.watch(searchQueryProvider);
+    final hasActiveFilter =
+        activeFilter != null || activeQuery.trim().isNotEmpty;
 
     return booksAsync.when(
-      loading: () => const Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
-      ),
-      error: (error, stack) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, color: AppColors.error, size: 48),
-            const SizedBox(height: 16),
-            Text(
-              'Hiba a könyvek betöltésekor: $error',
-              style: const TextStyle(color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => ref.read(bookListProvider.notifier).refresh(),
-              child: const Text('Újra'),
-            ),
-          ],
+      loading: () => const [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          ),
         ),
-      ),
+      ],
+      error: (error, _) => [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    color: AppColors.error,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Hiba a könyvek betöltésekor:\n$error',
+                    style: const TextStyle(color: AppColors.textSecondary),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () =>
+                        ref.read(bookListProvider.notifier).refresh(),
+                    child: const Text('Újra'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
       data: (books) {
         if (books.isEmpty) {
-          return EmptyState(
-            actionLabel: 'Szkenneld be az első könyved',
-            onAction: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ScannerScreen()),
-              );
-              ref.read(bookListProvider.notifier).refresh();
-            },
-          );
+          if (hasActiveFilter) {
+            return [
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: EmptyState(
+                  icon: Icons.filter_alt_off_rounded,
+                  title: 'Nincs találat a szűrésre',
+                  subtitle:
+                      'Egyetlen könyv sem felel meg a jelenlegi keresési vagy állapot-szűrési feltételeknek.',
+                  actionLabel: 'Szűrők törlése',
+                  actionIcon: Icons.clear_all_rounded,
+                  onAction: () {
+                    _searchController.clear();
+                    ref.read(searchQueryProvider.notifier).state = '';
+                    ref.read(statusFilterProvider.notifier).state = null;
+                    setState(() => _isSearching = false);
+                  },
+                ),
+              ),
+            ];
+          }
+
+          return [
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: EmptyState(
+                actionLabel: 'Vonalkód szkennelése',
+                actionIcon: Icons.qr_code_scanner_rounded,
+                onAction: _openScanner,
+                secondaryActionLabel: 'Online keresés / Kézi felvétel',
+                secondaryActionIcon: Icons.travel_explore_rounded,
+                onSecondaryAction: () => setState(() => _currentTab = 1),
+              ),
+            ),
+          ];
         }
 
         if (_isGridView) {
-          return GridView.builder(
-            padding: const EdgeInsets.all(16),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.55,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
+          return [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 205,
+                  mainAxisExtent: 300,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final book = books[index];
+                    return BookCard(
+                      book: book,
+                      isGridView: true,
+                      onTap: () => _openBookDetail(book),
+                    );
+                  },
+                  childCount: books.length,
+                ),
+              ),
             ),
-            itemCount: books.length,
-            itemBuilder: (context, index) {
-              final book = books[index];
-              return BookCard(
-                book: book,
-                isGridView: true,
-                onTap: () => _openBookDetail(book),
-              );
-            },
-          );
+          ];
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          itemCount: books.length,
-          itemBuilder: (context, index) {
-            final book = books[index];
-            return BookCard(
-              book: book,
-              isGridView: false,
-              onTap: () => _openBookDetail(book),
-            );
-          },
-        );
+        return [
+          SliverPadding(
+            padding: const EdgeInsets.only(top: 6, bottom: 24),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final book = books[index];
+                  return Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 860),
+                      child: BookCard(
+                        book: book,
+                        isGridView: false,
+                        onTap: () => _openBookDetail(book),
+                      ),
+                    ),
+                  );
+                },
+                childCount: books.length,
+              ),
+            ),
+          ),
+        ];
       },
     );
   }
 
-  void _openBookDetail(Book book) async {
+  Future<void> _openBookDetail(Book book) async {
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => BookDetailScreen(book: book),
       ),
     );
-    // Refresh list when returning from detail
-    ref.read(bookListProvider.notifier).refresh();
+    if (mounted) {
+      ref.read(bookListProvider.notifier).refresh();
+    }
   }
 
   void _showSortDialog() {
@@ -538,62 +673,64 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Center(
-                child: SizedBox(
-                  width: 40,
-                  child: Divider(thickness: 3, color: AppColors.textMuted),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Center(
+                  child: SizedBox(
+                    width: 40,
+                    child: Divider(thickness: 3, color: AppColors.textMuted),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Rendezés',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+                const SizedBox(height: 16),
+                const Text(
+                  'Rendezés',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              ...BookSortOrder.values.map((sort) {
-                final isSelected = sort == currentSort;
-                return ListTile(
-                  title: Text(
-                    sort.label,
-                    style: TextStyle(
-                      color: isSelected
-                          ? AppColors.primary
-                          : AppColors.textPrimary,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.w400,
+                const SizedBox(height: 12),
+                ...BookSortOrder.values.map((sort) {
+                  final isSelected = sort == currentSort;
+                  return ListTile(
+                    title: Text(
+                      sort.label,
+                      style: TextStyle(
+                        color: isSelected
+                            ? AppColors.primary
+                            : AppColors.textPrimary,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w400,
+                      ),
                     ),
-                  ),
-                  trailing: isSelected
-                      ? const Icon(Icons.check_rounded,
-                          color: AppColors.primary)
-                      : null,
-                  onTap: () {
-                    ref.read(bookSortOrderProvider.notifier).state = sort;
-                    ref.read(bookListProvider.notifier).refresh();
-                    Navigator.pop(context);
-                  },
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                );
-              }),
-              const SizedBox(height: 8),
-            ],
+                    trailing: isSelected
+                        ? const Icon(Icons.check_rounded,
+                            color: AppColors.primary)
+                        : null,
+                    onTap: () {
+                      ref.read(bookSortOrderProvider.notifier).state = sort;
+                      Navigator.pop(sheetContext);
+                    },
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
         );
       },
