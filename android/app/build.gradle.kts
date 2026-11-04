@@ -22,7 +22,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         // A pubspec.yaml-ben megadott verziókód és verziónév használata
         versionCode = flutter.versionCode
-        versionName = "${flutter.versionName} (by @Lithexf | Dart/Flutter | 4832 lines)"
+        versionName = "${flutter.versionName} (by @Lithexf | Dart/Flutter | 5643 lines)"
     }
 
     buildTypes {

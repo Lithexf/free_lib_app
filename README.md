@@ -2,7 +2,8 @@
 
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 ![Language](https://img.shields.io/badge/language-Dart-blue)
-![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?logo=Flutter&logoColor=white)
+![Flutter](https://img.shields.io/badge/Flutter-%2302569B?logo=flutter&logoColor=white)
+![Összes sor](https://img.shields.io/badge/%C3%96sszes_sor-5643-blueviolet)
 
 ## Áttekintés
 
@@ -20,38 +21,40 @@ Az alkalmazás kétfázisú keresési stratégiával (először gyors angol/nemz
 - **Statisztika és éves olvasási kihívás**: Testreszabható éves olvasási cél követése, összes elolvasott oldalszám, állapotszerinti kördiagram és havi gyarapodási oszlopdiagram.
 - **Letisztult sötét téma (Dark Mode)**: Egyszerű, animációmentes, átlátható felület reszponzív elrendezéssel (`BottomNavigationBar` mobilon, `NavigationRail` széles kijelzőn).
 
-## Projektstruktúra (Source Tree)
+## Projektstruktúra
 
 ```text
 free_lib_app/
-├── android/                        # Android natív konfiguráció, Manifest és generált ikonok (mipmap-*)
+├── android/                                    # Android natív konfiguráció és ikonok
 ├── assets/
 │   └── icons/
-│       └── icon.png                # Alkalmazás- és APK-ikon forrásfájl
+│       ├── icon.png                            # Alkalmazás- és Android APK-ikon
+│       └── icon.ico                            # Windows (.ico) ikon az APK fájlhoz
 ├── lib/
-│   ├── main.dart                   # Alkalmazás belépési pont és globális hibakezelés
+│   ├── main.dart                               # Belépési pont és globális hibakezelés
 │   ├── data/
 │   │   ├── database/
-│   │   │   └── app_database.dart   # SQLite adatbázis-kezelő és automatikus titkosítási migráció
+│   │   │   └── app_database.dart               # Titkosított SQLite adatbázis-kezelő
 │   │   ├── models/
-│   │   │   ├── book.dart           # Könyv (Book) adatmodell
-│   │   │   └── reading_status.dart # Olvasási állapotok (ReadingStatus)
+│   │   │   ├── book.dart                       # Könyv (Book) adatmodell
+│   │   │   └── reading_status.dart             # Olvasási állapotok (ReadingStatus)
 │   │   └── services/
 │   │       ├── app_exceptions.dart             # Strukturált kivételosztályok
-│   │       ├── book_api_service.dart           # Kétfázisú ISBN és könyvkereső API szolgáltatás
-│   │       ├── isbn_validator.dart             # ISBN-10 / ISBN-13 ellenőrző és konvertáló
-│   │       └── library_encryption_service.dart # 256 bites ChaCha20 + MAC helyi titkosító
+│   │       ├── book_api_service.dart           # Kétfázisú ISBN és könyvkereső API
+│   │       ├── isbn_validator.dart             # ISBN-10 / ISBN-13 validátor
+│   │       └── library_encryption_service.dart # 256 bites ChaCha20 + MAC titkosító
 │   ├── providers/
-│   │   ├── book_providers.dart     # Riverpod állapotkezelők (könyvlista, szűrők, statisztika)
-│   │   └── database_provider.dart  # Adatbázis és API szolgáltatók
+│   │   ├── book_providers.dart                 # Riverpod állapotkezelők és statisztika
+│   │   └── database_provider.dart              # Adatbázis és API szolgáltatók
 │   └── ui/
-│       ├── screens/                # Képernyők (Főoldal, Hozzáadás, Szkenner, Adatlap, Statisztika)
-│       ├── theme/                  # Egyszerű sötét téma (AppTheme) és színpaletta (AppColors)
-│       └── widgets/                # Újrafelhasználható UI elemek (BookCard, EmptyState, stb.)
+│       ├── screens/                            # Alkalmazás képernyők
+│       ├── theme/                              # Sötét téma (AppTheme, AppColors)
+│       └── widgets/                            # Újrafelhasználható UI elemek
 ├── test/
-│   └── free_lib_test.dart          # Egység- és felületi (widget) tesztek
-├── pubspec.yaml                    # Függőségek, eszközök és ikon-generátor konfiguráció
-└── FreeLib_latest.apk              # Telepíthető, aláírt kiadási (release) Android APK csomag
+│   └── free_lib_test.dart                      # Egység- és felületi (widget) tesztek
+├── pubspec.yaml                                # Függőségek és ikon-konfiguráció
+├── signature.yaml                              # Projekt metaadatok és sorszám
+└── FreeLib_latest.apk                          # Aláírt kiadási (release) Android APK
 ```
 
 ## Futtatás, tesztelés és csomagolás

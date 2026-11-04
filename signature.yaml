@@ -1,6 +1,7 @@
+# Projekt aláírás és metaadatok
 name: free_lib_app
 published_by: '@Lithexf'
 version: 1.0.0+1
 lang: dart
 sdk: flutter
-total_lines: 4832
+total_lines: 5643
