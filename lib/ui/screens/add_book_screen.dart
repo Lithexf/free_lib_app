@@ -143,10 +143,13 @@ class _AddBookScreenState extends ConsumerState<AddBookScreen> {
 
   Widget _buildOnlineSearchTab() {
     final existingBooks = ref.watch(bookListProvider).valueOrNull ?? const [];
-    final existingIsbns = <String>{
-      for (final b in existingBooks) ...IsbnValidator.getAllFormats(b.isbn),
-      for (final b in existingBooks) b.isbn,
-    };
+    final existingIsbns = _searchResults.isEmpty
+        ? const <String>{}
+        : <String>{
+            for (final b in existingBooks)
+              ...IsbnValidator.getAllFormats(b.isbn),
+            for (final b in existingBooks) b.isbn,
+          };
 
     return Column(
       children: [
@@ -251,6 +254,7 @@ class _AddBookScreenState extends ConsumerState<AddBookScreen> {
                   ? CachedNetworkImage(
                       imageUrl: item.coverUrl!,
                       fit: BoxFit.cover,
+                      memCacheWidth: 132,
                       fadeInDuration: Duration.zero,
                       errorWidget: (_, _, _) =>
                           const Icon(Icons.book, color: AppColors.textMuted),
@@ -316,16 +320,17 @@ class _AddBookScreenState extends ConsumerState<AddBookScreen> {
 
   Future<void> _addCandidateBook(Book candidate) async {
     try {
-      final saved = await ref.read(bookListProvider.notifier).addBook(candidate);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Hozzáadva: ${saved.title}')),
-      );
+      await ref.read(bookListProvider.notifier).addBook(candidate);
     } on AppException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.userMessage)),
-      );
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(e.userMessage),
+            duration: const Duration(seconds: 2),
+          ),
+        );
     }
   }
 
@@ -535,9 +540,7 @@ class _AddBookScreenState extends ConsumerState<AddBookScreen> {
       final saved = await notifier.addBook(newBook);
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Elmentve: ${saved.title}')),
-      );
+      ScaffoldMessenger.of(context).clearSnackBars();
 
       if (widget.isEmbedded) {
         _formKey.currentState?.reset();
@@ -552,6 +555,10 @@ class _AddBookScreenState extends ConsumerState<AddBookScreen> {
         _coverUrlController.clear();
         _descriptionController.clear();
         setState(() => _selectedStatus = ReadingStatus.planToRead);
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => BookDetailScreen(book: saved)),
+        );
       } else {
         Navigator.pushReplacement(
           context,
@@ -560,9 +567,14 @@ class _AddBookScreenState extends ConsumerState<AddBookScreen> {
       }
     } on AppException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.userMessage)),
-      );
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(e.userMessage),
+            duration: const Duration(seconds: 2),
+          ),
+        );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

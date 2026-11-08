@@ -220,12 +220,16 @@ class StatsScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      item.$2,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        item.$2,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -323,8 +327,10 @@ class StatsScreen extends ConsumerWidget {
 
     final maxCount = data.fold<int>(
       0,
-      (max, entry) =>
-          (entry['count'] as int) > max ? (entry['count'] as int) : max,
+      (max, entry) {
+        final c = (entry['count'] as num?)?.toInt() ?? 0;
+        return c > max ? c : max;
+      },
     );
 
     return Card(
@@ -364,7 +370,7 @@ class StatsScreen extends ConsumerWidget {
                           if (index < 0 || index >= data.length) {
                             return const SizedBox.shrink();
                           }
-                          final m = data[index]['month'] as String;
+                          final m = (data[index]['month'] as String?) ?? '';
                           final label = m.length >= 7 ? m.substring(5) : m;
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
@@ -385,7 +391,8 @@ class StatsScreen extends ConsumerWidget {
                       x: index,
                       barRods: [
                         BarChartRodData(
-                          toY: (data[index]['count'] as int).toDouble(),
+                          toY: ((data[index]['count'] as num?)?.toInt() ?? 0)
+                              .toDouble(),
                           color: AppColors.primary,
                           width: 14,
                           borderRadius: BorderRadius.circular(2),

@@ -569,7 +569,11 @@ class BookApiService {
   ) async {
     final authorsList = details['authors'] as List<dynamic>?;
     final authors = authorsList
-        ?.map((a) => (a as Map<String, dynamic>)['name'] as String?)
+        ?.map((a) {
+          if (a is Map<String, dynamic>) return a['name'] as String?;
+          if (a is String) return a;
+          return null;
+        })
         .whereType<String>()
         .join(', ');
 

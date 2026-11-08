@@ -24,6 +24,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     with WidgetsBindingObserver {
   late final MobileScannerController _controller;
   bool _isProcessing = false;
+  bool _hasNavigated = false;
   bool _permissionDenied = false;
   bool _torchEnabled = false;
   final _manualIsbnController = TextEditingController();
@@ -337,6 +338,10 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   }
 
   void _openManualFallback({String? isbn, int tabIndex = 0}) {
+    if (_hasNavigated) return;
+    _hasNavigated = true;
+    _controller.stop();
+    ScaffoldMessenger.of(context).clearSnackBars();
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -349,7 +354,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   }
 
   void _onDetect(BarcodeCapture capture) {
-    if (_isProcessing) return;
+    if (_isProcessing || _hasNavigated || !mounted) return;
 
     for (final barcode in capture.barcodes) {
       final rawValue = barcode.rawValue;
@@ -365,14 +370,20 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   }
 
   void _onManualSubmit() {
+    if (_isProcessing || _hasNavigated) return;
     final text = _manualIsbnController.text.trim();
     if (text.isEmpty) return;
 
     final isbn = IsbnValidator.normalize(text);
     if (isbn == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Érvénytelen ISBN szám.')),
-      );
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Érvénytelen ISBN szám.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
       return;
     }
 
@@ -380,77 +391,93 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   }
 
   Future<void> _processIsbn(String isbn) async {
-    if (_isProcessing) return;
+    if (_isProcessing || _hasNavigated || !mounted) return;
 
     FocusScope.of(context).unfocus();
+    ScaffoldMessenger.of(context).clearSnackBars();
     setState(() => _isProcessing = true);
 
     try {
-      // Nem állítjuk le a kamerát (_controller.stop()), mert az fekete képernyőt
-      // és lassú újraindulást okoz; az _isProcessing flag azonnal blokkolja az újabb beolvasást.
       final db = ref.read(databaseProvider);
       final existing = await db.getBookByIsbn(isbn);
+      if (!mounted || _hasNavigated) return;
+
       if (existing != null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Már a könyvtárban van: ${existing.title}'),
-              action: SnackBarAction(
-                label: 'Megnyitás',
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => BookDetailScreen(book: existing),
-                    ),
-                  );
-                },
-              ),
-            ),
-          );
-        }
+        // Ha a könyv már szerepel az adatbázisban, lebegő üzenet helyett
+        // közvetlenül megnyitjuk az adatlapját, hogy semmi ne takarja ki a gombokat.
+        _hasNavigated = true;
+        _controller.stop();
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => BookDetailScreen(book: existing),
+          ),
+        );
         return;
       }
 
       final book = await ref.read(bookListProvider.notifier).scanAndAdd(isbn);
-      if (!mounted) return;
+      if (!mounted || _hasNavigated) return;
 
       if (book != null) {
+        _hasNavigated = true;
+        _controller.stop();
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => BookDetailScreen(book: book)),
+          MaterialPageRoute(
+            builder: (_) => BookDetailScreen(
+              book: book,
+              isNewlyScanned: true,
+            ),
+          ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Nem található online adat ehhez az ISBN-hez.'),
-            action: SnackBarAction(
-              label: 'Kézi felvétel',
-              onPressed: () => _openManualFallback(isbn: isbn, tabIndex: 1),
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(
+            SnackBar(
+              content:
+                  const Text('Nem található online adat ehhez az ISBN-hez.'),
+              duration: const Duration(seconds: 3),
+              action: SnackBarAction(
+                label: 'Kézi felvétel',
+                onPressed: () => _openManualFallback(isbn: isbn, tabIndex: 1),
+              ),
             ),
-          ),
-        );
+          );
       }
     } on AppException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.userMessage),
-            action: SnackBarAction(
-              label: 'Kézi felvétel',
-              onPressed: () => _openManualFallback(isbn: isbn, tabIndex: 1),
+      if (mounted && !_hasNavigated) {
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(e.userMessage),
+              duration: const Duration(seconds: 3),
+              action: SnackBarAction(
+                label: 'Kézi felvétel',
+                onPressed: () => _openManualFallback(isbn: isbn, tabIndex: 1),
+              ),
             ),
-          ),
-        );
+          );
       }
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Hiba történt a keresés közben.')),
-        );
+      if (mounted && !_hasNavigated) {
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text('Hiba történt a keresés közben.'),
+              duration: Duration(seconds: 2),
+            ),
+          );
       }
     } finally {
-      if (mounted) setState(() => _isProcessing = false);
+      // Csak akkor engedélyezzük újra a beolvasást, ha nem navigáltunk el az oldalról;
+      // ezzel megakadályozzuk, hogy a következő kameraképkocka duplikált riasztást dobjon.
+      if (mounted && !_hasNavigated) {
+        setState(() => _isProcessing = false);
+      }
     }
   }
 }

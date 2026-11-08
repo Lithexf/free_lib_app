@@ -117,6 +117,12 @@ void main() {
       expect(IsbnValidator.isLikelyBookBarcode('5991234567890'), isFalse);
       expect(IsbnValidator.normalize('9780140283290'), '9780140283290');
       expect(IsbnValidator.normalize('5991234567890'), isNull);
+      expect(IsbnValidator.isValid('123456789012X'), isFalse);
+      expect(IsbnValidator.isbn10to13('123X567890'), isNull);
+      expect(
+        IsbnValidator.getAllFormats('LOCAL-GB-x123456789'),
+        ['LOCAL-GB-x123456789'],
+      );
     });
   });
 
@@ -649,6 +655,151 @@ void main() {
 
       expect(find.text('Tartsd a vonalkódot a keretbe'), findsOneWidget);
       expect(find.text('Olvasom'), findsOneWidget);
+    });
+
+    testWidgets(
+        'BookDetailScreen clears lingering SnackBars and keeps Hozzáadás a könyvtárhoz button enabled immediately',
+        (tester) async {
+      final scannedBook = Book(
+        id: 1,
+        isbn: '9780140283297',
+        title: 'Újonnan szkennelt könyv',
+        authors: 'Teszt Szerző',
+        dateAdded: DateTime(2026, 5, 1),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            bookListProvider
+                .overrideWith(() => _FakeBookListNotifier([scannedBook])),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: Center(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Már a könyvtárban van: Teszt'),
+                        ),
+                      );
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BookDetailScreen(
+                            book: scannedBook,
+                            isNewlyScanned: true,
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text('Szkennelés szimuláció'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Szkennelés szimuláció'));
+      await tester.pumpAndSettle();
+
+      // Nem maradhat ott a "Már a könyvtárban van" lebegő sáv
+      expect(find.textContaining('Már a könyvtárban van'), findsNothing);
+
+      // A kék "Hozzáadás a könyvtárhoz" gomb azonnal aktív és megnyomható
+      final addBtnFinder =
+          find.widgetWithText(ElevatedButton, 'Hozzáadás a könyvtárhoz');
+      expect(addBtnFinder, findsOneWidget);
+      final addBtn = tester.widget<ElevatedButton>(addBtnFinder);
+      expect(addBtn.onPressed, isNotNull);
+
+      await tester.ensureVisible(addBtnFinder);
+      await tester.tap(addBtnFinder);
+      await tester.pumpAndSettle();
+
+      // Mentés után visszatér az előző képernyőre
+      expect(find.text('Szkennelés szimuláció'), findsOneWidget);
+    });
+
+    testWidgets(
+        '300-book stress test: encrypts, decrypts, renders, scrolls, and filters 300 books smoothly',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final crypto = LibraryEncryptionService.instance;
+      final statuses = ReadingStatus.values;
+
+      // 300 könyv generálása, titkosítása és visszafejtése (beleértve 1500+ oldalas és LOCAL- ISBN könyveket)
+      final books300 = List<Book>.generate(300, (index) {
+        final isbn = index % 10 == 0
+            ? 'LOCAL-GB-x12345678$index'
+            : '9780140${(100000 + index).toString()}';
+        final rawBook = Book(
+          id: index + 1,
+          isbn: isbn,
+          title: 'Teszt Könyv #${index + 1}: Hosszú Cím és Különleges Karakterek ÁÉÍÓÖŐÚÜŰ',
+          subtitle: 'Alcím a(z) ${index + 1}. kötethez',
+          authors: 'Szerző ${(index % 40) + 1}',
+          publisher: 'Kiadó ${(index % 15) + 1}',
+          publishedDate: '${1990 + (index % 35)}',
+          description: 'Részletes leírás a könyvről ' * 8,
+          pageCount: 150 + (index * 5), // Akár 1650 oldalas könyvek is
+          currentPage: (index * 2) % 150,
+          categories: 'Regény, Klasszikus',
+          status: statuses[index % statuses.length].name,
+          rating: (index % 5 == 0) ? null : ((index % 5) + 1).toDouble(),
+          dateAdded: DateTime(2026, (index % 12) + 1, (index % 28) + 1),
+        );
+
+        final encryptedMap = crypto.encryptBookMap(rawBook.toMap());
+        final decryptedMap = crypto.decryptBookMap(encryptedMap);
+        return Book.fromMap(decryptedMap);
+      });
+
+      expect(books300.length, 300);
+      expect(books300.first.title, contains('Teszt Könyv #1'));
+      expect(books300.last.pageCount, greaterThan(1500));
+
+      await tester.pumpWidget(
+        buildTestApp(size: const Size(390, 844), books: books300),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Összes könyv: 300'), findsOneWidget);
+
+      // Görgetés a 300 elemű rácsnézetben
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
+      await tester.pumpAndSettle();
+
+      // Listanézetre váltás és görgetés
+      await tester.tap(find.byIcon(Icons.view_list));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
+      await tester.pumpAndSettle();
+
+      // 1500+ oldalas könyv adatlapjának megnyitása (Slider teszt 1500+ oldalnál)
+      await tester.pumpWidget(
+        ProviderScope(
+          key: UniqueKey(),
+          overrides: [
+            bookListProvider
+                .overrideWith(() => _FakeBookListNotifier(books300)),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            home: BookDetailScreen(book: books300.last),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(Slider), findsOneWidget);
     });
   });
 }

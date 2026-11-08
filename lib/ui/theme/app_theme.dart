@@ -97,6 +97,18 @@ class AppTheme {
         color: AppColors.surfaceBorder,
         thickness: 1,
       ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.surfaceLight,
+        contentTextStyle: const TextStyle(color: AppColors.textPrimary),
+        showCloseIcon: true,
+        closeIconColor: AppColors.textSecondary,
+        insetPadding: const EdgeInsets.fromLTRB(16, 8, 16, 76),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: const BorderSide(color: AppColors.surfaceBorder),
+        ),
+      ),
     );
   }
 }

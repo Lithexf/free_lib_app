@@ -64,10 +64,16 @@ class IsbnValidator {
     final cleaned = isbn10.replaceAll(RegExp(r'[^0-9Xx]'), '');
     if (cleaned.length != 10) return null;
 
-    final base = '978${cleaned.substring(0, 9)}';
+    final body = cleaned.substring(0, 9);
+    for (int i = 0; i < 9; i++) {
+      final code = body.codeUnitAt(i);
+      if (code < 48 || code > 57) return null;
+    }
+
+    final base = '978$body';
     int sum = 0;
     for (int i = 0; i < 12; i++) {
-      final digit = int.parse(base[i]);
+      final digit = base.codeUnitAt(i) - 48;
       sum += (i.isEven) ? digit : digit * 3;
     }
     final checkDigit = (10 - (sum % 10)) % 10;
@@ -94,7 +100,10 @@ class IsbnValidator {
   /// Egy ISBN összes formátumváltozatának (ISBN-10, ISBN-13 vagy mindkettő) lekérése.
   /// Segít maximalizálni az API-keresések találati arányát.
   static List<String> getAllFormats(String isbn) {
+    if (isbn.startsWith('LOCAL-')) return <String>[isbn];
+
     final cleaned = isbn.replaceAll(RegExp(r'[^0-9Xx]'), '');
+    if (cleaned.isEmpty) return const <String>[];
     final formats = <String>{cleaned};
 
     if (cleaned.length == 10) {
@@ -112,9 +121,9 @@ class IsbnValidator {
   static bool _isValidIsbn10(String isbn) {
     int sum = 0;
     for (int i = 0; i < 9; i++) {
-      final c = isbn[i];
-      if (c.codeUnitAt(0) < 48 || c.codeUnitAt(0) > 57) return false;
-      sum += int.parse(c) * (10 - i);
+      final c = isbn.codeUnitAt(i);
+      if (c < 48 || c > 57) return false;
+      sum += (c - 48) * (10 - i);
     }
 
     // Az utolsó karakter lehet 'X' is (amely 10-et jelent)
@@ -122,7 +131,7 @@ class IsbnValidator {
     if (lastChar == 'X') {
       sum += 10;
     } else if (lastChar.codeUnitAt(0) >= 48 && lastChar.codeUnitAt(0) <= 57) {
-      sum += int.parse(lastChar);
+      sum += lastChar.codeUnitAt(0) - 48;
     } else {
       return false;
     }
@@ -134,13 +143,15 @@ class IsbnValidator {
   static bool _isValidIsbn13(String isbn) {
     int sum = 0;
     for (int i = 0; i < 12; i++) {
-      final c = isbn[i];
-      if (c.codeUnitAt(0) < 48 || c.codeUnitAt(0) > 57) return false;
-      final digit = int.parse(c);
+      final c = isbn.codeUnitAt(i);
+      if (c < 48 || c > 57) return false;
+      final digit = c - 48;
       sum += (i.isEven) ? digit : digit * 3;
     }
 
+    final lastCode = isbn.codeUnitAt(12);
+    if (lastCode < 48 || lastCode > 57) return false;
     final checkDigit = (10 - (sum % 10)) % 10;
-    return int.parse(isbn[12]) == checkDigit;
+    return (lastCode - 48) == checkDigit;
   }
 }

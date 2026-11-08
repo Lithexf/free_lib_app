@@ -14,8 +14,13 @@ import 'add_book_screen.dart';
 /// Egyszerű, átlátható könyvadatlap olvasási állapottal, haladással, értékeléssel és jegyzettel.
 class BookDetailScreen extends ConsumerStatefulWidget {
   final Book book;
+  final bool isNewlyScanned;
 
-  const BookDetailScreen({super.key, required this.book});
+  const BookDetailScreen({
+    super.key,
+    required this.book,
+    this.isNewlyScanned = false,
+  });
 
   @override
   ConsumerState<BookDetailScreen> createState() => _BookDetailScreenState();
@@ -28,12 +33,20 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
   late int _currentPage;
   late TextEditingController _notesController;
   bool _hasChanges = false;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
     _syncFromBook(widget.book);
     _notesController = TextEditingController(text: _book.notes ?? '');
+    // Esetleges korábbi képernyőről maradt lebegő értesítések eltávolítása,
+    // hogy semmi se takarja ki az alsó mentés / hozzáadás gombot.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+      }
+    });
   }
 
   void _syncFromBook(Book book) {
@@ -70,7 +83,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
         final navigator = Navigator.of(context);
-        if (_hasChanges) {
+        if (_hasChanges || _book.id == null) {
           await _saveChanges(silent: true);
         }
         if (mounted) {
@@ -129,11 +142,13 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _hasChanges ? () => _saveChanges() : null,
+                      onPressed: _isSaving
+                          ? null
+                          : () => _saveChanges(closeAfterSave: true),
                       child: Text(
-                        _book.id == null
+                        (_book.id == null || widget.isNewlyScanned)
                             ? 'Hozzáadás a könyvtárhoz'
-                            : 'Változtatások mentése',
+                            : 'Mentés',
                       ),
                     ),
                   ),
@@ -160,6 +175,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                 ? CachedNetworkImage(
                     imageUrl: _book.coverUrl!,
                     fit: BoxFit.cover,
+                    memCacheWidth: 320,
                     fadeInDuration: Duration.zero,
                     errorWidget: (_, _, _) => _buildCoverPlaceholder(),
                   )
@@ -287,27 +303,33 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Olvasási haladás',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                Text(
-                  '$current / $total oldal ($pct%)',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 13,
+            SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  const Text(
+                    'Olvasási haladás',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                   ),
-                ),
-              ],
+                  Text(
+                    '$current / $total oldal ($pct%)',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
             ),
             Slider(
               value: current.toDouble(),
               min: 0,
               max: total.toDouble(),
-              divisions: total,
+              divisions: total <= 200 ? total : null,
               onChanged: (val) => _updateCurrentPage(val.round()),
             ),
             Wrap(
@@ -576,7 +598,13 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
     }
   }
 
-  Future<void> _saveChanges({bool silent = false}) async {
+  Future<void> _saveChanges({
+    bool silent = false,
+    bool closeAfterSave = false,
+  }) async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+
     final wasNew = _book.id == null;
     final trimmedNotes = _notesController.text.trim();
     final updatedBook = _book.copyWith(
@@ -596,24 +624,38 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
         setState(() {
           _book = savedBook;
           _hasChanges = false;
+          _isSaving = false;
         });
-        if (!silent) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Mentve.')),
-          );
+        if (closeAfterSave) {
+          ScaffoldMessenger.of(context).clearSnackBars();
+          final navigator = Navigator.of(context);
+          if (navigator.canPop()) {
+            navigator.pop(savedBook);
+          }
+          return;
         }
       }
     } on AppException catch (e) {
-      if (mounted && !silent) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.userMessage)),
-        );
+      if (mounted) {
+        setState(() => _isSaving = false);
+        if (!silent) {
+          ScaffoldMessenger.of(context)
+            ..clearSnackBars()
+            ..showSnackBar(
+              SnackBar(content: Text(e.userMessage)),
+            );
+        }
       }
     } catch (_) {
-      if (mounted && !silent) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Hiba történt a mentéskor.')),
-        );
+      if (mounted) {
+        setState(() => _isSaving = false);
+        if (!silent) {
+          ScaffoldMessenger.of(context)
+            ..clearSnackBars()
+            ..showSnackBar(
+              const SnackBar(content: Text('Hiba történt a mentéskor.')),
+            );
+        }
       }
     }
   }

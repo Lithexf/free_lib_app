@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -15,6 +16,13 @@ import '../services/library_encryption_service.dart';
 class AppDatabase {
   static AppDatabase? _instance;
   static Database? _database;
+  static const String _backupFileName = 'freelib_vault_backup.enc';
+
+  /// Memóriabeli gyorsítótár a már visszafejtett könyvekhez, hogy 300+ könyv esetén se kelljen
+  /// minden egyes keresési leütéskor újra visszafejteni a teljes adatbázist.
+  /// Minden írási művelet (insert / update / delete) azonnal érvényteleníti.
+  List<Book>? _decryptedCache;
+  Future<void> _snapshotQueue = Future.value();
 
   AppDatabase._();
 
@@ -49,6 +57,9 @@ class AppDatabase {
 
       // Ha voltak korábban beszkennelt, még titkosítatlan könyvek, automatikusan titkosítjuk őket helyben
       await _encryptLegacyPlaintextRows(db);
+      // Ha újratelepítés után az SQLite tábla üres, de a megtartott titkosított mentésfájl létezik, automatikusan visszatöltjük
+      await _restoreFromEncryptedSnapshotIfNeeded(db);
+      await _writeEncryptedSnapshot(db);
       return db;
     } catch (e) {
       throw StorageException(
@@ -56,6 +67,82 @@ class AppDatabase {
         e,
       );
     }
+  }
+
+  /// Automatikusan elmenti a teljes könyvtár titkosított pillanatképét a belső tárolókba,
+  /// hogy újratelepítéskor (ha a felhasználó megtartja az alkalmazás adatait) 100%-osan visszaálljon.
+  /// Sorba állított és atomi (.tmp -> átnevezés) írást használ, hogy 300+ könyv esetén se sérülhessen a fájl.
+  Future<void> _writeEncryptedSnapshot(Database db) {
+    _snapshotQueue = _snapshotQueue.then((_) async {
+      try {
+        final rows = await db.query('books');
+        final payload = jsonEncode(rows);
+        final encryptedPayload =
+            LibraryEncryptionService.instance.encryptField(payload);
+        if (encryptedPayload == null) return;
+
+        final docsDir = await getApplicationDocumentsDirectory();
+        await _atomicWriteFile(
+          p.join(docsDir.path, _backupFileName),
+          encryptedPayload,
+        );
+
+        final supportDir = await getApplicationSupportDirectory();
+        await _atomicWriteFile(
+          p.join(supportDir.path, _backupFileName),
+          encryptedPayload,
+        );
+      } catch (_) {}
+    });
+    return _snapshotQueue;
+  }
+
+  Future<void> _atomicWriteFile(String targetPath, String content) async {
+    final tmpFile = File('$targetPath.tmp');
+    await tmpFile.writeAsString(content, flush: true);
+    await tmpFile.rename(targetPath);
+  }
+
+  /// Ha az adatbázis üres, de a titkosított biztonsági mentés megtalálható az eszközön,
+  /// automatikusan visszatölti az összes korábban beszkennelt könyvet.
+  Future<void> _restoreFromEncryptedSnapshotIfNeeded(Database db) async {
+    try {
+      final countResult =
+          await db.rawQuery('SELECT COUNT(*) as count FROM books');
+      final currentCount = (countResult.first['count'] as num?)?.toInt() ?? 0;
+      if (currentCount > 0) return;
+
+      final docsDir = await getApplicationDocumentsDirectory();
+      final supportDir = await getApplicationSupportDirectory();
+      final candidates = [
+        File(p.join(docsDir.path, _backupFileName)),
+        File(p.join(supportDir.path, _backupFileName)),
+      ];
+
+      for (final file in candidates) {
+        if (!await file.exists()) continue;
+        final rawEncrypted = (await file.readAsString()).trim();
+        final decryptedJson =
+            LibraryEncryptionService.instance.decryptField(rawEncrypted);
+        if (decryptedJson == null || decryptedJson.isEmpty) continue;
+
+        final decoded = jsonDecode(decryptedJson);
+        if (decoded is List && decoded.isNotEmpty) {
+          final batch = db.batch();
+          for (final item in decoded) {
+            if (item is Map) {
+              batch.insert(
+                'books',
+                Map<String, dynamic>.from(item),
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+            }
+          }
+          await batch.commit(noResult: true);
+          return;
+        }
+      }
+    } catch (_) {}
   }
 
   /// Automatikusan titkosítja a korábbi verziókból származó, még nyílt szövegű könyvsorokat,
@@ -169,11 +256,14 @@ class AppDatabase {
       final db = await database;
       final encryptedMap =
           LibraryEncryptionService.instance.encryptBookMap(book.toMap());
-      return await db.insert(
+      final id = await db.insert(
         'books',
         encryptedMap,
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
+      _decryptedCache = null;
+      await _writeEncryptedSnapshot(db);
+      return id;
     } on AppException {
       rethrow;
     } catch (e) {
@@ -187,15 +277,28 @@ class AppDatabase {
       throw const StorageException('A frissítendő könyvnek nincs azonosítója.');
     }
     try {
+      final existing = await getBookByIsbn(book.isbn);
+      if (existing != null && existing.id != book.id) {
+        throw DuplicateBookException(
+          isbn: existing.isbn,
+          existingTitle: existing.title,
+        );
+      }
+
       final db = await database;
       final encryptedMap =
           LibraryEncryptionService.instance.encryptBookMap(book.toMap());
-      return await db.update(
+      final affected = await db.update(
         'books',
         encryptedMap,
         where: 'id = ?',
         whereArgs: [book.id],
       );
+      _decryptedCache = null;
+      await _writeEncryptedSnapshot(db);
+      return affected;
+    } on AppException {
+      rethrow;
     } catch (e) {
       throw StorageException('Nem sikerült frissíteni a könyv adatait.', e);
     }
@@ -205,11 +308,14 @@ class AppDatabase {
   Future<int> deleteBook(int id) async {
     try {
       final db = await database;
-      return await db.delete(
+      final affected = await db.delete(
         'books',
         where: 'id = ?',
         whereArgs: [id],
       );
+      _decryptedCache = null;
+      await _writeEncryptedSnapshot(db);
+      return affected;
     } catch (e) {
       throw StorageException('Nem sikerült törölni a könyvet.', e);
     }
@@ -263,18 +369,24 @@ class AppDatabase {
     String orderBy = 'date_added DESC',
   }) async {
     try {
-      final db = await database;
-      final maps = await db.query(
-        'books',
-        where: (status != null && status.isNotEmpty) ? 'status = ?' : null,
-        whereArgs: (status != null && status.isNotEmpty) ? [status] : null,
-      );
+      List<Book> allBooks;
+      if (_decryptedCache != null) {
+        allBooks = _decryptedCache!;
+      } else {
+        final db = await database;
+        final maps = await db.query('books');
+        allBooks = List<Book>.unmodifiable(maps.map(_decryptRow));
+        _decryptedCache = allBooks;
+      }
 
-      var books = maps.map(_decryptRow).toList();
+      Iterable<Book> filtered = allBooks;
+      if (status != null && status.isNotEmpty) {
+        filtered = filtered.where((b) => b.status == status);
+      }
 
       final trimmedQuery = searchQuery?.trim().toLowerCase() ?? '';
       if (trimmedQuery.isNotEmpty) {
-        books = books.where((b) {
+        filtered = filtered.where((b) {
           return b.title.toLowerCase().contains(trimmedQuery) ||
               (b.authors?.toLowerCase().contains(trimmedQuery) ?? false) ||
               b.isbn.toLowerCase().contains(trimmedQuery) ||
@@ -284,9 +396,10 @@ class AppDatabase {
                   false) ||
               (b.romajiTitle?.toLowerCase().contains(trimmedQuery) ?? false) ||
               (b.originalAuthor?.toLowerCase().contains(trimmedQuery) ?? false);
-        }).toList();
+        });
       }
 
+      final books = filtered.toList();
       _sortBooksInMemory(books, orderBy);
       return books;
     } catch (e) {
@@ -448,6 +561,7 @@ class AppDatabase {
   Future<void> close() async {
     final db = await database;
     await db.close();
+    _decryptedCache = null;
     _database = null;
   }
 }

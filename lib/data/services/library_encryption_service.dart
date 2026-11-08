@@ -47,17 +47,40 @@ class LibraryEncryptionService {
       } catch (_) {}
 
       final keyFile = File(p.join(supportDir.path, '.freelib_vault.key'));
-      if (await keyFile.exists()) {
-        final encoded = (await keyFile.readAsString()).trim();
-        final decoded = base64Decode(encoded);
-        if (decoded.length == _keyLength) {
-          _key = Uint8List.fromList(decoded);
-          return;
+      File? docsKeyFile;
+      try {
+        final docsDir = await getApplicationDocumentsDirectory();
+        if (!await docsDir.exists()) {
+          await docsDir.create(recursive: true);
+        }
+        docsKeyFile = File(p.join(docsDir.path, '.freelib_vault.key'));
+      } catch (_) {}
+
+      // Ha bármelyik belső könyvtárban megmaradt a kulcs (pl. újratelepítéskor az adatok megtartásával),
+      // betöltjük és szinkronizáljuk mindkét helyre közvetlenül az adatbázis mellé.
+      for (final candidate in [keyFile, ?docsKeyFile]) {
+        if (await candidate.exists()) {
+          final encoded = (await candidate.readAsString()).trim();
+          final decoded = base64Decode(encoded);
+          if (decoded.length == _keyLength) {
+            _key = Uint8List.fromList(decoded);
+            if (!await keyFile.exists()) {
+              await keyFile.writeAsString(encoded, flush: true);
+            }
+            if (docsKeyFile != null && !await docsKeyFile.exists()) {
+              await docsKeyFile.writeAsString(encoded, flush: true);
+            }
+            return;
+          }
         }
       }
 
       final newKey = _generateSecureRandomBytes(_keyLength);
-      await keyFile.writeAsString(base64Encode(newKey), flush: true);
+      final encodedNewKey = base64Encode(newKey);
+      await keyFile.writeAsString(encodedNewKey, flush: true);
+      if (docsKeyFile != null) {
+        await docsKeyFile.writeAsString(encodedNewKey, flush: true);
+      }
       _key = newKey;
     } catch (_) {
       // Tesztkörnyezeti fallback, ha a natív path_provider nem érhető el

@@ -197,6 +197,7 @@ class BookCard extends StatelessWidget {
       return CachedNetworkImage(
         imageUrl: book.coverUrl!,
         fit: BoxFit.cover,
+        memCacheWidth: isGridView ? 360 : 140,
         fadeInDuration: Duration.zero,
         fadeOutDuration: Duration.zero,
         placeholder: (context, url) => _buildPlaceholder(),
