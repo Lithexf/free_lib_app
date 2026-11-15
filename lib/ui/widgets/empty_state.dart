@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
-/// Egyszerű üres-állapot kijelző, ha nincs könyv vagy találat.
 class EmptyState extends StatelessWidget {
   final String title;
   final String subtitle;

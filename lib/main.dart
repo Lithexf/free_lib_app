@@ -9,11 +9,8 @@ import 'ui/theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Magyar nyelvi területi beállítások inicializálása a dátumformázáshoz
   await initializeDateFormatting('hu');
 
-  // Globális hibakezelés a nem kezelt keretrendszerbeli és aszinkron hibákra
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
   };
@@ -22,7 +19,6 @@ Future<void> main() async {
     return true;
   };
 
-  // Barátságos hibaoldal megjelenítése a piros/szürke összeomlási képernyő helyett
   ErrorWidget.builder = (FlutterErrorDetails details) {
     return Material(
       color: AppColors.background,
@@ -65,7 +61,6 @@ Future<void> main() async {
     );
   };
 
-  // Állapotsor és navigációs sáv stílusának beállítása
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -75,7 +70,6 @@ Future<void> main() async {
     ),
   );
 
-  // Álló és fekvő tájolás együttes engedélyezése a reszponzív elrendezéshez
   await SystemChrome.setPreferredOrientations(DeviceOrientation.values);
 
   runApp(const ProviderScope(child: FreeLibApp()));

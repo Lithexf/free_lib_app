@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/book.dart';
 import '../../data/models/reading_status.dart';
@@ -11,7 +11,6 @@ import 'book_detail_screen.dart';
 import 'scanner_screen.dart';
 import 'stats_screen.dart';
 
-/// Főképernyő egyszerű navigációval (Könyvtár, Hozzáadás, Szkennelés, Statisztika).
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -20,7 +19,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  int _currentTab = 0; // 0 = Könyvtár, 1 = Hozzáadás, 2 = Statisztika
+  int _currentTab = 0;
   bool _isGridView = true;
   bool _isSearching = false;
   final _searchController = TextEditingController();

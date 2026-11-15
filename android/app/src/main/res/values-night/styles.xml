@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Az Android ablak témája az alkalmazás indulása közben (sötét rendszertéma esetén) -->
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <!-- Indulási háttér megjelenítése, amíg a Flutter motor kirajzolja az első képkockát -->
         <item name="android:windowBackground">@drawable/launch_background</item>
     </style>
-    <!-- A futó Flutter felület mögötti Android ablak témája -->
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>

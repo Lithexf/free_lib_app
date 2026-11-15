@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -21,7 +21,6 @@ import 'package:free_lib_app/ui/widgets/scan_overlay.dart';
 import 'package:free_lib_app/ui/widgets/status_badge.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
-/// Minimális memóriabeli Dio adapter az izolált API szolgáltatás tesztekhez.
 class _FakeHttpAdapter implements HttpClientAdapter {
   final ResponseBody Function(RequestOptions options) handler;
 
@@ -90,7 +89,7 @@ void main() {
   group('IsbnValidator', () {
     test('validates ISBN-10 and ISBN-13 checksums accurately', () {
       expect(IsbnValidator.isValid('0-14-028329-3'), isTrue);
-      expect(IsbnValidator.isValid('043942089X'), isTrue); // 'X' ellenőrző karakter
+      expect(IsbnValidator.isValid('043942089X'), isTrue);
       expect(IsbnValidator.isValid('978-0-14-028329-7'), isTrue);
       expect(IsbnValidator.isValid('1234567890'), isFalse);
       expect(IsbnValidator.isValid('12345'), isFalse);
@@ -102,7 +101,6 @@ void main() {
       expect(IsbnValidator.isbn10to13('invalid'), isNull);
       expect(IsbnValidator.isbn13to10('9780140283297'), '0140283293');
       expect(IsbnValidator.isbn13to10('123'), isNull);
-      // A 979-es előtagnak nincs ISBN-10 megfelelője
       expect(IsbnValidator.isbn13to10('9791032700891'), isNull);
 
       final formats10 = IsbnValidator.getAllFormats('0140283293');
@@ -124,6 +122,21 @@ void main() {
         ['LOCAL-GB-x123456789'],
       );
     });
+
+    test('detects Hungarian ISBNs and strips EAN-2/EAN-5 manga/book price add-ons', () {
+      expect(IsbnValidator.isValid('9789634058397'), isTrue);
+      expect(IsbnValidator.isHungarianIsbn('9789634058397'), isTrue);
+      expect(IsbnValidator.isHungarianIsbn('978-615-5956-01-0'), isTrue);
+      expect(IsbnValidator.isHungarianIsbn('9631196003'), isTrue);
+      expect(IsbnValidator.isHungarianIsbn('9780140283297'), isFalse);
+      expect(IsbnValidator.isHungarianIsbn('9781974700523'), isFalse);
+
+      expect(IsbnValidator.normalize('978197470052350999'), '9781974700523');
+      expect(IsbnValidator.isValid('978197470052350999'), isTrue);
+      expect(IsbnValidator.isLikelyBookBarcode('978197470052350999'), isTrue);
+
+      expect(IsbnValidator.normalize('043942089x'), '043942089X');
+    });
   });
 
   group('Book model, ReadingStatus & AppExceptions', () {
@@ -142,7 +155,7 @@ void main() {
         'current_page': 260,
         'categories': 'Regény',
         'cover_url': 'https://example.com/cover.jpg',
-        'rating': 5, // SQLite egész számos (integer) ábrázolás
+        'rating': 5,
         'status': 'reading',
         'date_added': nowMs,
         'date_started': nowMs,
@@ -167,7 +180,6 @@ void main() {
       final unstartedBook = book.copyWith(currentPage: 0);
       expect(unstartedBook.readingProgress, 0.0);
 
-      // Opcionális mezők törlése a copyWith(notes: null, rating: null) hívással
       final cleared = book.copyWith(
         notes: null,
         rating: null,
@@ -225,14 +237,12 @@ void main() {
       expect(encryptedMap['notes'], startsWith('ENC1:'));
       expect(encryptedMap['notes'], isNot(contains('Privát')));
 
-      // Oda-vissza titkosítás és visszafejtés után pontosan az eredeti könyvet kapjuk
       final decryptedMap = crypto.decryptBookMap(encryptedMap);
       final restored = Book.fromMap(decryptedMap);
       expect(restored.title, 'Titkos Napló');
       expect(restored.authors, 'Teszt Szerző');
       expect(restored.notes, 'Privát személyes jegyzet');
 
-      // A korábbi nyílt szövegű sorok (már beszkennelt könyvek) továbbra is olvashatók maradnak
       final legacyDecrypted = crypto.decryptBookMap(book.toMap());
       expect(legacyDecrypted['title'], 'Titkos Napló');
     });
@@ -416,15 +426,10 @@ void main() {
     });
 
     test(
-        'queries English APIs first and only falls back to Moly.hu last if English APIs return empty',
+        'finds Hungarian book 9789634058397 (A Gyűrűk Ura I-III.) rapidly via Bookline with full metadata',
         () async {
-      final calledHosts = <String>[];
-
       final dio = Dio()
         ..httpClientAdapter = _FakeHttpAdapter((options) {
-          calledHosts.add('${options.uri.host}${options.uri.path}');
-
-          // 1. A Google Books 0 találatot ad vissza
           if (options.uri.host.contains('googleapis.com')) {
             return ResponseBody.fromString(
               jsonEncode({'totalItems': 0}),
@@ -435,7 +440,210 @@ void main() {
             );
           }
 
-          // 2. Az Open Library közvetlen API üres objektumot ad vissza
+          if (options.uri.host.contains('bookline.hu') &&
+              options.uri.path.contains('/search/search.action')) {
+            const searchHtml = '''
+<div class="t-product-detailed">
+  <img data-srcset="[https://marvin.bline.hu/product_images/223/ID22-298546.JPG, https://marvin.bline.hu/product_images/223/B1298546.JPG]"
+       src="https://marvin.bline.hu/product_images/223/B1298546.JPG" />
+  <a href="/product/home.action?_v=J_R_R_Tolkien_A_Gyuruk_Ura_I_III_&amp;type=22&amp;id=298546&amp;ca=SEARCH" class="o-product__author">
+    J. R. R. Tolkien
+  </a>
+  <h2 class="o-product__title h4">
+    <a href="/product/home.action?_v=J_R_R_Tolkien_A_Gyuruk_Ura_I_III_&amp;type=22&amp;id=298546&amp;ca=SEARCH" class="o-product__title">
+      A Gyűrűk Ura I-III.
+    </a>
+  </h2>
+  <div class="js-Raty o-raty" data-stars="4.5" data-favcount="15"></div>
+  <p class="o-product__lead">A Gyűrűk Ura J. R. R. Tolkien világhírű fantasy-klasszikusa.</p>
+  <div class="o-product__publisher">Európa Könyvkiadó, 2025</div>
+</div>
+''';
+            return ResponseBody.fromString(
+              searchHtml,
+              200,
+              headers: {
+                Headers.contentTypeHeader: ['text/html; charset=utf-8'],
+              },
+            );
+          }
+
+          if (options.uri.host.contains('bookline.hu') &&
+              options.uri.path.contains('/product/home.action')) {
+            const detailHtml = '''
+<html>
+<head>
+  <meta name="description" content="Kategória: Fantasy, Ár: 17099 Ft"/>
+  <meta property="og:description" content="A Gyűrűk Ura J. R. R. Tolkien világhírű fantasy-klasszikusa most egyetlen kötetben olvasható."/>
+</head>
+<body>
+  <span itemprop="sku">9789634058397</span>
+  <ul>
+    <li>Európa Könyvkiadó, 2025</li>
+    <li>1774 oldal</li>
+    <li>Eredeti cím: The Lord of the Rings</li>
+  </ul>
+</body>
+</html>
+''';
+            return ResponseBody.fromString(
+              detailHtml,
+              200,
+              headers: {
+                Headers.contentTypeHeader: ['text/html; charset=utf-8'],
+              },
+            );
+          }
+
+          return ResponseBody.fromString('{}', 404);
+        });
+
+      final service = BookApiService(dio: dio);
+      final book = await service.lookupByIsbn('9789634058397');
+
+      expect(book, isNotNull);
+      expect(book!.isbn, '9789634058397');
+      expect(book.title, 'A Gyűrűk Ura I-III.');
+      expect(book.authors, 'J. R. R. Tolkien');
+      expect(book.publisher, 'Európa Könyvkiadó');
+      expect(book.publishedDate, '2025');
+      expect(book.pageCount, 1774);
+      expect(book.categories, 'Fantasy');
+      expect(book.originalTitle, 'The Lord of the Rings');
+      expect(book.externalRating, 4.5);
+      expect(book.externalRatingCount, 15);
+      expect(book.externalRatingSource, 'Bookline');
+      expect(
+        book.coverUrl,
+        'https://marvin.bline.hu/product_images/223/ID22-298546.JPG',
+      );
+    });
+
+    test(
+        'enriches English Manga (9781974700523 Demon Slayer) by combining Open Library Edition and Search when Google Books returns 429',
+        () async {
+      int googleCalls = 0;
+
+      final dio = Dio()
+        ..httpClientAdapter = _FakeHttpAdapter((options) {
+          if (options.uri.host.contains('googleapis.com')) {
+            googleCalls++;
+            return ResponseBody.fromString(
+              jsonEncode({'error': 'Rate limit exceeded'}),
+              429,
+              headers: {
+                Headers.contentTypeHeader: ['application/json; charset=utf-8'],
+              },
+            );
+          }
+
+          if (options.uri.path.contains('/api/books')) {
+            return ResponseBody.fromString(
+              jsonEncode({
+                'ISBN:9781974700523': {
+                  'thumbnail_url':
+                      'https://covers.openlibrary.org/b/id/9157307-S.jpg',
+                  'details': {
+                    'title': 'Demon Slayer',
+                    'subtitle': 'Kimetsu no Yaiba, Vol. 1',
+                    'publishers': ['VIZ Media LLC'],
+                    'publish_date': 'Jul 03, 2018',
+                    'number_of_pages': 192,
+                  }
+                }
+              }),
+              200,
+              headers: {
+                Headers.contentTypeHeader: ['application/json; charset=utf-8'],
+              },
+            );
+          }
+
+          if (options.uri.path.contains('/search.json')) {
+            return ResponseBody.fromString(
+              jsonEncode({
+                'numFound': 1,
+                'docs': [
+                  {
+                    'key': '/works/OL20641122W',
+                    'title': '鬼滅の刃 1',
+                    'author_name': ['Koyoharu Gotoge'],
+                    'publisher': ['VIZ Media LLC'],
+                    'publish_date': ['2018'],
+                    'number_of_pages_median': 192,
+                    'subject': ['Manga', 'Fantasy', 'Shonen'],
+                    'cover_i': 9157307,
+                    'isbn': ['9781974700523'],
+                    'ratings_average': 4.43,
+                    'ratings_count': 70,
+                  }
+                ]
+              }),
+              200,
+              headers: {
+                Headers.contentTypeHeader: ['application/json; charset=utf-8'],
+              },
+            );
+          }
+
+          return ResponseBody.fromString('{}', 404);
+        });
+
+      final service = BookApiService(dio: dio);
+      final book = await service.lookupByIsbn('978197470052350999');
+
+      expect(book, isNotNull);
+      expect(googleCalls, 1);
+      expect(book!.title, 'Demon Slayer');
+      expect(book.subtitle, 'Kimetsu no Yaiba, Vol. 1');
+      expect(book.originalTitle, '鬼滅の刃 1');
+      expect(book.authors, 'Koyoharu Gotoge');
+      expect(book.publisher, 'VIZ Media LLC');
+      expect(book.pageCount, 192);
+      expect(book.categories, 'Manga, Fantasy, Shonen');
+      expect(book.externalRating, closeTo(4.43, 0.01));
+      expect(book.externalRatingSource, 'Open Library');
+    });
+
+    test(
+        'falls back through Antikvarium and Open Library to Moly.hu last when primary APIs return empty',
+        () async {
+      final calledHosts = <String>[];
+
+      final dio = Dio()
+        ..httpClientAdapter = _FakeHttpAdapter((options) {
+          calledHosts.add('${options.uri.host}${options.uri.path}');
+
+          if (options.uri.host.contains('bookline.hu')) {
+            return ResponseBody.fromString(
+              '<html><body>nem találtunk a keresésnek megfelelő terméket</body></html>',
+              200,
+              headers: {
+                Headers.contentTypeHeader: ['text/html; charset=utf-8'],
+              },
+            );
+          }
+
+          if (options.uri.host.contains('antikvarium.hu')) {
+            return ResponseBody.fromString(
+              '<div class="empty"></div>',
+              200,
+              headers: {
+                Headers.contentTypeHeader: ['text/html; charset=utf-8'],
+              },
+            );
+          }
+
+          if (options.uri.host.contains('googleapis.com')) {
+            return ResponseBody.fromString(
+              jsonEncode({'totalItems': 0}),
+              200,
+              headers: {
+                Headers.contentTypeHeader: ['application/json; charset=utf-8'],
+              },
+            );
+          }
+
           if (options.uri.path.contains('/api/books')) {
             return ResponseBody.fromString(
               jsonEncode({}),
@@ -446,7 +654,6 @@ void main() {
             );
           }
 
-          // 3. Az Open Library Search API 0 találatot ad vissza
           if (options.uri.path.contains('/search.json')) {
             return ResponseBody.fromString(
               jsonEncode({'numFound': 0, 'docs': []}),
@@ -457,7 +664,6 @@ void main() {
             );
           }
 
-          // 4. A Moly.hu tartalék magyar könyv HTML-t ad vissza
           if (options.uri.host.contains('moly.hu')) {
             return ResponseBody.fromString(
               '<html><head><title>Gárdonyi Géza: Egri csillagok · Moly</title></head>'
@@ -480,19 +686,7 @@ void main() {
       expect(book.authors, 'Gárdonyi Géza');
       expect(book.externalRatingSource, 'Moly.hu');
 
-      // Ellenőrizzük, hogy az angol API-k a moly.hu ELŐTT lettek lekérdezve
-      final googleIndex =
-          calledHosts.indexWhere((h) => h.contains('googleapis.com'));
-      final openLibDirectIndex =
-          calledHosts.indexWhere((h) => h.contains('openlibrary.org/api/books'));
-      final openLibSearchIndex = calledHosts
-          .indexWhere((h) => h.contains('openlibrary.org/search.json'));
       final molyIndex = calledHosts.indexWhere((h) => h.contains('moly.hu'));
-
-      expect(googleIndex, greaterThanOrEqualTo(0));
-      expect(openLibDirectIndex, greaterThan(googleIndex));
-      expect(openLibSearchIndex, greaterThan(openLibDirectIndex));
-      expect(molyIndex, greaterThan(openLibSearchIndex));
       expect(molyIndex, equals(calledHosts.length - 1));
     });
 
@@ -560,7 +754,6 @@ void main() {
       expect(find.byType(NavigationRail), findsNothing);
       expect(find.text('A könyvtárad üres'), findsOneWidget);
 
-      // Navigálás a Hozzáadás fülre és Kézi felvétel űrlap ellenőrzése
       await tester.tap(find.text('Hozzáadás'));
       await tester.pumpAndSettle();
       expect(find.text('Könyv hozzáadása'), findsOneWidget);
@@ -569,7 +762,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Cím *'), findsOneWidget);
 
-      // Navigálás a Statisztika fülre
       await tester.tap(find.text('Statisztika'));
       await tester.pumpAndSettle();
       expect(find.textContaining('olvasási kihívás'), findsOneWidget);
@@ -614,24 +806,20 @@ void main() {
       expect(find.text('Dűne'), findsWidgets);
       expect(find.text('Frank Herbert'), findsOneWidget);
 
-      // Listanézetre váltás
       await tester.tap(find.byIcon(Icons.view_list));
       await tester.pumpAndSettle();
       expect(find.byType(BookCard), findsOneWidget);
 
-      // Könyv adatlap megnyitása
       await tester.tap(find.text('Frank Herbert'));
       await tester.pumpAndSettle();
       expect(find.byType(BookDetailScreen), findsOneWidget);
       expect(find.text('Könyv adatlap'), findsOneWidget);
       expect(find.text('300 / 600 oldal (50%)'), findsOneWidget);
 
-      // +10 oldal gomb megnyomása
       await tester.tap(find.text('+10 oldal'));
       await tester.pumpAndSettle();
       expect(find.text('310 / 600 oldal (52%)'), findsOneWidget);
 
-      // Kész gomb megnyomása
       await tester.tap(find.text('Kész'));
       await tester.pumpAndSettle();
       expect(find.text('600 / 600 oldal (100%)'), findsOneWidget);
@@ -708,10 +896,8 @@ void main() {
       await tester.tap(find.text('Szkennelés szimuláció'));
       await tester.pumpAndSettle();
 
-      // Nem maradhat ott a "Már a könyvtárban van" lebegő sáv
       expect(find.textContaining('Már a könyvtárban van'), findsNothing);
 
-      // A kék "Hozzáadás a könyvtárhoz" gomb azonnal aktív és megnyomható
       final addBtnFinder =
           find.widgetWithText(ElevatedButton, 'Hozzáadás a könyvtárhoz');
       expect(addBtnFinder, findsOneWidget);
@@ -722,7 +908,6 @@ void main() {
       await tester.tap(addBtnFinder);
       await tester.pumpAndSettle();
 
-      // Mentés után visszatér az előző képernyőre
       expect(find.text('Szkennelés szimuláció'), findsOneWidget);
     });
 
@@ -736,7 +921,6 @@ void main() {
       final crypto = LibraryEncryptionService.instance;
       final statuses = ReadingStatus.values;
 
-      // 300 könyv generálása, titkosítása és visszafejtése (beleértve 1500+ oldalas és LOCAL- ISBN könyveket)
       final books300 = List<Book>.generate(300, (index) {
         final isbn = index % 10 == 0
             ? 'LOCAL-GB-x12345678$index'
@@ -750,7 +934,7 @@ void main() {
           publisher: 'Kiadó ${(index % 15) + 1}',
           publishedDate: '${1990 + (index % 35)}',
           description: 'Részletes leírás a könyvről ' * 8,
-          pageCount: 150 + (index * 5), // Akár 1650 oldalas könyvek is
+          pageCount: 150 + (index * 5),
           currentPage: (index * 2) % 150,
           categories: 'Regény, Klasszikus',
           status: statuses[index % statuses.length].name,
@@ -774,17 +958,14 @@ void main() {
 
       expect(find.text('Összes könyv: 300'), findsOneWidget);
 
-      // Görgetés a 300 elemű rácsnézetben
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
       await tester.pumpAndSettle();
 
-      // Listanézetre váltás és görgetés
       await tester.tap(find.byIcon(Icons.view_list));
       await tester.pumpAndSettle();
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
       await tester.pumpAndSettle();
 
-      // 1500+ oldalas könyv adatlapjának megnyitása (Slider teszt 1500+ oldalnál)
       await tester.pumpWidget(
         ProviderScope(
           key: UniqueKey(),

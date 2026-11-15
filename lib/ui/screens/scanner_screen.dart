@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -12,7 +12,6 @@ import '../widgets/scan_overlay.dart';
 import 'add_book_screen.dart';
 import 'book_detail_screen.dart';
 
-/// Gyors kamerás vonalkódolvasó képernyő azonnali ISBN-felismeréssel.
 class ScannerScreen extends ConsumerStatefulWidget {
   const ScannerScreen({super.key});
 
@@ -34,9 +33,6 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Azonnali kamera-inicializálás késleltetés nélkül, kizárólag könyv-vonalkód (EAN/UPC)
-    // formátumokra szűrve. returnImage: false biztosítja, hogy az app SOHA nem kapja meg
-    // és nem tárolja el a kameraképet, csak a felismert számkódot.
     _controller = MobileScannerController(
       autoStart: true,
       returnImage: false,
@@ -81,7 +77,6 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
         setState(() => _permissionDenied = true);
       }
     } catch (_) {
-      // Ha a platform nem támogatja a permission_handler-t, a MobileScanner kezeli.
     }
   }
 
@@ -130,7 +125,6 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                   child: MobileScanner(
                     controller: _controller,
                     onDetect: _onDetect,
-                    // Fekete képernyő helyett tiszta töltőfelület, amíg a kameraszenzor megnyílik
                     placeholderBuilder: (context) {
                       return Container(
                         color: AppColors.background,
@@ -403,8 +397,6 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
       if (!mounted || _hasNavigated) return;
 
       if (existing != null) {
-        // Ha a könyv már szerepel az adatbázisban, lebegő üzenet helyett
-        // közvetlenül megnyitjuk az adatlapját, hogy semmi ne takarja ki a gombokat.
         _hasNavigated = true;
         _controller.stop();
         Navigator.pushReplacement(
@@ -473,8 +465,6 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
           );
       }
     } finally {
-      // Csak akkor engedélyezzük újra a beolvasást, ha nem navigáltunk el az oldalról;
-      // ezzel megakadályozzuk, hogy a következő kameraképkocka duplikált riasztást dobjon.
       if (mounted && !_hasNavigated) {
         setState(() => _isProcessing = false);
       }

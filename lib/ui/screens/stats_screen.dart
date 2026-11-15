@@ -1,4 +1,4 @@
-import 'package:fl_chart/fl_chart.dart';
+﻿import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,7 +6,6 @@ import '../../data/models/reading_status.dart';
 import '../../providers/book_providers.dart';
 import '../theme/app_colors.dart';
 
-/// Egyszerű statisztikai képernyő alap számadatokkal, éves céllal és diagramokkal.
 class StatsScreen extends ConsumerWidget {
   const StatsScreen({super.key});
 

@@ -1,8 +1,7 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/book.dart';
 import 'database_provider.dart';
 
-/// Rendezési lehetőségek a könyvtárhoz
 enum BookSortOrder {
   dateAddedDesc('Legutóbb hozzáadott'),
   dateAddedAsc('Legrégebbi elöl'),
@@ -32,22 +31,18 @@ enum BookSortOrder {
   }
 }
 
-/// Aktuális rendezési sorrend állapota
 final bookSortOrderProvider = StateProvider<BookSortOrder>((ref) {
   return BookSortOrder.dateAddedDesc;
 });
 
-/// Aktuális olvasási állapot szűrő (`null` = összes megjelenítése)
 final statusFilterProvider = StateProvider<String?>((ref) {
   return null;
 });
 
-/// Keresési kifejezés állapota
 final searchQueryProvider = StateProvider<String>((ref) {
   return '';
 });
 
-/// A könyvtárat kezelő Notifier, amely reagál a szűrési, keresési és rendezési változásokra
 class BookListNotifier extends AsyncNotifier<List<Book>> {
   @override
   Future<List<Book>> build() async {
@@ -75,18 +70,15 @@ class BookListNotifier extends AsyncNotifier<List<Book>> {
     );
   }
 
-  /// Könyvlista és statisztikák újratöltése az adatbázisból
   Future<void> refresh() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(_fetchCurrent);
     ref.invalidate(bookStatsProvider);
   }
 
-  /// Új könyv hozzáadása a könyvtárhoz
   Future<Book> addBook(Book book) async {
     final db = ref.read(databaseProvider);
 
-    // Ellenőrzés, hogy létezik-e már (ISBN-10 és ISBN-13 változatokat is vizsgálva)
     final existing = await db.getBookByIsbn(book.isbn);
     if (existing != null) return existing;
 
@@ -95,7 +87,6 @@ class BookListNotifier extends AsyncNotifier<List<Book>> {
     return book.copyWith(id: id);
   }
 
-  /// Meglévő könyv adatainak frissítése
   Future<Book> updateBook(Book book) async {
     final db = ref.read(databaseProvider);
     await db.updateBook(book);
@@ -103,27 +94,22 @@ class BookListNotifier extends AsyncNotifier<List<Book>> {
     return book;
   }
 
-  /// Könyv törlése azonosító alapján
   Future<void> deleteBook(int id) async {
     final db = ref.read(databaseProvider);
     await db.deleteBook(id);
     await refresh();
   }
 
-  /// Szkennelés és hozzáadás: ISBN keresése online, metaadatok letöltése, majd mentés a könyvtárba
   Future<Book?> scanAndAdd(String isbn) async {
     final apiService = ref.read(bookApiServiceProvider);
     final db = ref.read(databaseProvider);
 
-    // Ellenőrzés, hogy szerepel-e már a könyvtárban
     final existing = await db.getBookByIsbn(isbn);
     if (existing != null) return existing;
 
-    // Metaadatok lekérése az API-kból (offline állapot esetén NetworkException-t dobhat)
     final book = await apiService.lookupByIsbn(isbn);
     if (book == null) return null;
 
-    // Újbóli ellenőrzés az API által visszaadott feloldott/normalizált ISBN-nel
     final resolvedExisting = await db.getBookByIsbn(book.isbn);
     if (resolvedExisting != null) return resolvedExisting;
 
@@ -133,11 +119,9 @@ class BookListNotifier extends AsyncNotifier<List<Book>> {
   }
 }
 
-/// A fő könyvlista szolgáltató (provider)
 final bookListProvider =
     AsyncNotifierProvider<BookListNotifier, List<Book>>(BookListNotifier.new);
 
-/// A felhasználó éves olvasási célját kezelő Notifier (SQLite-ban tárolva)
 class YearlyGoalNotifier extends AsyncNotifier<int> {
   static const String _settingKey = 'yearly_reading_goal';
   static const int defaultGoal = 12;
@@ -162,7 +146,6 @@ class YearlyGoalNotifier extends AsyncNotifier<int> {
 final yearlyGoalProvider =
     AsyncNotifierProvider<YearlyGoalNotifier, int>(YearlyGoalNotifier.new);
 
-/// Statisztikai szolgáltató (független az aktív keresési/állapot szűrőktől)
 final bookStatsProvider = FutureProvider<BookStats>((ref) async {
   final db = ref.watch(databaseProvider);
   final yearlyGoal = await ref.watch(yearlyGoalProvider.future);
@@ -185,7 +168,6 @@ final bookStatsProvider = FutureProvider<BookStats>((ref) async {
   );
 });
 
-/// Megváltoztathatatlan (immutable) statisztikai adatosztály
 class BookStats {
   final int totalCount;
   final Map<String, int> countByStatus;

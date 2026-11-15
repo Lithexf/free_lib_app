@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,7 +11,6 @@ import '../../providers/book_providers.dart';
 import '../theme/app_colors.dart';
 import 'add_book_screen.dart';
 
-/// Egyszerű, átlátható könyvadatlap olvasási állapottal, haladással, értékeléssel és jegyzettel.
 class BookDetailScreen extends ConsumerStatefulWidget {
   final Book book;
   final bool isNewlyScanned;
@@ -40,8 +39,6 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
     super.initState();
     _syncFromBook(widget.book);
     _notesController = TextEditingController(text: _book.notes ?? '');
-    // Esetleges korábbi képernyőről maradt lebegő értesítések eltávolítása,
-    // hogy semmi se takarja ki az alsó mentés / hozzáadás gombot.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();

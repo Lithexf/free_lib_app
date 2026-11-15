@@ -1,11 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../data/models/book.dart';
 import '../../data/models/reading_status.dart';
 import '../theme/app_colors.dart';
 import 'status_badge.dart';
 
-/// Egyszerű könyvkártya rács- és listanézethez.
 class BookCard extends StatelessWidget {
   final Book book;
   final VoidCallback? onTap;

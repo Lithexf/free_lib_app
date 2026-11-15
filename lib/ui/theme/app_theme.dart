@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// Egyszerű Material sötét téma animációk és extra díszítések nélkül.
 class AppTheme {
   AppTheme._();
 
@@ -20,7 +19,6 @@ class AppTheme {
         onSurface: AppColors.textPrimary,
         error: AppColors.error,
       ),
-      // Egyszerű, azonnali oldalváltás látványos animációk nélkül
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: _NoAnimationPageTransitionsBuilder(),

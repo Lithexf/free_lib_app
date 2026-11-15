@@ -1,5 +1,4 @@
-# Általános ideiglenes és rendszerfájlok
-*.class
+﻿*.class
 *.log
 *.pyc
 *.swp
@@ -12,17 +11,10 @@
 .swiftpm/
 migrate_working_dir/
 repomix-output.xml
-
-# IntelliJ / Android Studio fájlok
 *.iml
 *.ipr
 *.iws
 .idea/
-
-# VS Code beállítások
-#.vscode/
-
-# Flutter / Dart / Pub generált könyvtárak
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
@@ -31,15 +23,9 @@ repomix-output.xml
 .pub/
 /build/
 /coverage/
-
-# Szimbólum- és obfuszkációs fájlok
 app.*.symbols
 app.*.map.json
-
-# Android Studio build kimenetek
 /android/app/debug
 /android/app/profile
 /android/app/release
-
-# Widget előnézeti munkakönyvtár
 .widget_preview/

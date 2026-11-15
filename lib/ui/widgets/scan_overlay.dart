@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
-/// Egyszerű, statikus célzókeret a vonalkód-olvasóhoz.
 class ScanOverlay extends StatelessWidget {
   const ScanOverlay({super.key});
 

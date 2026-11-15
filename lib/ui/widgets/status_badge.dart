@@ -1,8 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../data/models/reading_status.dart';
 import '../theme/app_colors.dart';
 
-/// Egyszerű szöveges állapotcímke.
 class StatusBadge extends StatelessWidget {
   final ReadingStatus status;
   final bool selected;

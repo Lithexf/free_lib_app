@@ -1,9 +1,3 @@
-# Ez a fájl konfigurálja a Dart statikus kódelemzőt (analyzer), amely
-# hibákat, figyelmeztetéseket és kódminőségi szabályokat (linteket) ellenőriz.
-#
-# A parancssorból a `flutter analyze` paranccsal futtatható.
-
-# Ajánlott Flutter kódolási szabálykészlet aktiválása:
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
@@ -12,7 +6,4 @@ analyzer:
     - android/**
 
 linter:
-  # Projekt-specifikus lint szabályok testreszabása:
   rules:
-    # avoid_print: false  # Vedd ki a kommentből az `avoid_print` szabály kikapcsolásához
-    # prefer_single_quotes: true  # Vedd ki a kommentből az egyszeres idézőjelek megköveteléséhez

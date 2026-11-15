@@ -5,24 +5,17 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-/// Helyi, eszköz-specifikus 256 bites titkosító szolgáltatás (ChaCha20 folyamtitkosítás + integritás-ellenőrzés).
-///
-/// A kulcs kizárólag az alkalmazás zárt belső tárhelyén (`ApplicationSupportDirectory`)
-/// jön létre, így más alkalmazások (pl. TikTok, Twitter/X, galéria, fájlböngészők)
-/// nem férnek hozzá sem a kulcshoz, sem a titkosított könyvtáradatokhoz.
 class LibraryEncryptionService {
   static final LibraryEncryptionService instance = LibraryEncryptionService._();
   static const String _prefix = 'ENC1:';
-  static const int _keyLength = 32; // 256 bites kulcs
-  static const int _nonceLength = 12; // 96 bites egyszeri szám (nonce)
-  static const int _tagLength = 16; // 128 bites hitelesítő címke (MAC)
+  static const int _keyLength = 32;
+  static const int _nonceLength = 12;
+  static const int _tagLength = 16;
 
   Uint8List? _key;
 
   LibraryEncryptionService._();
 
-  /// Inicializálja a 256 bites titkosító kulcsot a zárt belső tárolóból,
-  /// valamint létrehozza a `.nomedia` fájlt, hogy külső média-indexelők ne lássák a cache-t.
   Future<void> init() async {
     if (_key != null) return;
     try {
@@ -31,8 +24,6 @@ class LibraryEncryptionService {
         await supportDir.create(recursive: true);
       }
 
-      // .nomedia fájl elhelyezése minden belső könyvtárban, hogy semmilyen rendszerszintű
-      // média- vagy cache-olvasó ne indexelje az alkalmazás fájljait
       final noMediaFile = File(p.join(supportDir.path, '.nomedia'));
       if (!await noMediaFile.exists()) {
         await noMediaFile.writeAsString('', flush: true);
@@ -56,8 +47,6 @@ class LibraryEncryptionService {
         docsKeyFile = File(p.join(docsDir.path, '.freelib_vault.key'));
       } catch (_) {}
 
-      // Ha bármelyik belső könyvtárban megmaradt a kulcs (pl. újratelepítéskor az adatok megtartásával),
-      // betöltjük és szinkronizáljuk mindkét helyre közvetlenül az adatbázis mellé.
       for (final candidate in [keyFile, ?docsKeyFile]) {
         if (await candidate.exists()) {
           final encoded = (await candidate.readAsString()).trim();
@@ -83,12 +72,10 @@ class LibraryEncryptionService {
       }
       _key = newKey;
     } catch (_) {
-      // Tesztkörnyezeti fallback, ha a natív path_provider nem érhető el
       _key ??= _generateSecureRandomBytes(_keyLength);
     }
   }
 
-  /// Tesztekhez fix kulcs beállítása.
   void initWithTestKey(Uint8List key) {
     assert(key.length == _keyLength);
     _key = Uint8List.fromList(key);
@@ -98,10 +85,9 @@ class LibraryEncryptionService {
     return value != null && value.startsWith(_prefix);
   }
 
-  /// Egy szöveges mező titkosítása `ENC1:<base64>` formátumba.
   String? encryptField(String? plainText) {
     if (plainText == null || plainText.isEmpty) return plainText;
-    if (plainText.startsWith(_prefix)) return plainText; // Már titkosított
+    if (plainText.startsWith(_prefix)) return plainText;
 
     final key = _ensureKey();
     final nonce = _generateSecureRandomBytes(_nonceLength);
@@ -118,9 +104,6 @@ class LibraryEncryptionService {
     return '$_prefix${base64Encode(combined)}';
   }
 
-  /// Egy `ENC1:<base64>` formátumú mező visszafejtése.
-  /// Ha a mező még régi (nem titkosított) szöveg, változtatás nélkül visszaadja,
-  /// így a korábban beszkennelt könyvek is maradéktalanul megmaradnak.
   String? decryptField(String? storedValue) {
     if (storedValue == null || storedValue.isEmpty) return storedValue;
     if (!storedValue.startsWith(_prefix)) return storedValue;
@@ -164,7 +147,6 @@ class LibraryEncryptionService {
     'original_author',
   ];
 
-  /// Adatbázisba írás előtt titkosítja a könyv szöveges mezőit.
   Map<String, dynamic> encryptBookMap(Map<String, dynamic> rawMap) {
     final result = Map<String, dynamic>.from(rawMap);
     for (final col in _encryptedColumns) {
@@ -176,7 +158,6 @@ class LibraryEncryptionService {
     return result;
   }
 
-  /// Adatbázisból olvasás után visszafejti a könyv szöveges mezőit.
   Map<String, dynamic> decryptBookMap(Map<String, dynamic> dbMap) {
     final result = Map<String, dynamic>.from(dbMap);
     for (final col in _encryptedColumns) {
@@ -202,7 +183,6 @@ class LibraryEncryptionService {
     return bytes;
   }
 
-  /// RFC 8439 ChaCha20 folyamtitkosító (256 bites kulcs, 96 bites nonce, 32 bites számláló).
   Uint8List _chacha20Xor(
     Uint8List key,
     Uint8List nonce,
@@ -231,7 +211,6 @@ class LibraryEncryptionService {
     var offset = 0;
 
     while (offset < input.length) {
-      // ChaCha20 konstans fejlécek ("expand 32-byte k")
       state[0] = 0x61707865;
       state[1] = 0x3320646e;
       state[2] = 0x79622d32;
@@ -279,13 +258,11 @@ class LibraryEncryptionService {
     return out;
   }
 
-  /// Kulcsfüggő ChaCha20-alapú 128 bites üzenethitelesítő kód (MAC).
   Uint8List _computeAuthTag(
     Uint8List key,
     Uint8List nonce,
     Uint8List cipherBytes,
   ) {
-    // Counter 0 blokkból egyszer használatos MAC-kulcsot származtatunk
     final polyKey = _chacha20Xor(key, nonce, 0, Uint8List(32));
     final acc = Uint32List(4);
     final polyData = ByteData.sublistView(polyKey);

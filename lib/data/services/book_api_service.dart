@@ -4,22 +4,8 @@ import '../models/book.dart';
 import 'app_exceptions.dart';
 import 'isbn_validator.dart';
 
-/// Könyv-metaadatok lekéréséért felelős szolgáltatás külső API-kból.
-///
-/// Keresési folyamat (maximális sebességre optimalizálva):
-///
-/// 1. fázis — Gyors angol / nemzetközi JSON API-k (elsőként futnak):
-///   1. Google Books API (ISBN-13 előnyben részesítve, majd ISBN-10)
-///   2. Open Library Books API (ISBN-13 és ISBN-10 együtt, egyetlen kérésben)
-///   3. Open Library Search API (szélesebb nemzetközi / manga / képregény lefedettség)
-///
-/// 2. fázis — Lassú magyar HTML kereső tartalék (csak ha az 1. fázis nem adott találatot):
-///   4. Moly.hu HTML keresés (kizárólag végső tartalékként, mivel a Moly.hu-nak nincs nyilvános API-ja)
 class BookApiService {
   final Dio _dio;
-
-  // Google Books API kulcs — `null` érték esetén a nyilvános kvótát használja
-  static const String? _googleBooksApiKey = null;
 
   BookApiService({Dio? dio})
       : _dio = dio ??
@@ -31,47 +17,101 @@ class BookApiService {
               },
             ));
 
-  /// Könyv keresése ISBN alapján:
-  /// 1) Először a gyors angol/nemzetközi JSON API-kban keres (Google Books, Open Library).
-  /// 2) Csak akkor tér át a magyar Moly.hu keresésre, ha egyik angol API sem adott találatot.
-  ///
-  /// [NetworkException] kivételt dob, ha minden lekérdezés kapcsolódási hiba miatt hiúsul meg.
   Future<Book?> lookupByIsbn(String rawIsbn) async {
     final isbn = IsbnValidator.normalize(rawIsbn);
     if (isbn == null) return null;
 
-    // A 13 jegyű ISBN előresorolása, majd utána a 10 jegyű változat
     final formats = _prioritizeIsbn13(IsbnValidator.getAllFormats(isbn));
+    final primaryIsbn = formats.isNotEmpty ? formats.first : isbn;
     final tracker = _RequestHealthTracker();
+    final isHungarian = IsbnValidator.isHungarianIsbn(primaryIsbn);
 
-    // ══════════════════════════════════════════════════════════════════
-    // 1. FÁZIS: Angol / nemzetközi JSON API-k (gyors lekérdezés)
-    // ══════════════════════════════════════════════════════════════════
+    if (isHungarian) {
+      final parallelResults = await Future.wait<Book?>([
+        _lookupBookline(primaryIsbn, tracker),
+        _lookupGoogleBooks(primaryIsbn, tracker),
+      ]);
 
-    // 1.1 Google Books API
+      final booklineBook = parallelResults[0];
+      final googleBook = parallelResults[1];
+
+      if (booklineBook != null && googleBook != null) {
+        return _applyTranslation(_mergeBooks(booklineBook, googleBook));
+      }
+      if (booklineBook != null) {
+        return _applyTranslation(booklineBook);
+      }
+      if (googleBook != null) {
+        if (_isMetadataIncomplete(googleBook) && !tracker.isOffline) {
+          final antikBook = await _lookupAntikvarium(primaryIsbn, tracker);
+          if (antikBook != null) {
+            return _applyTranslation(_mergeBooks(googleBook, antikBook));
+          }
+        }
+        return _applyTranslation(googleBook);
+      }
+
+      if (!tracker.isOffline) {
+        final antikBook = await _lookupAntikvarium(primaryIsbn, tracker);
+        if (antikBook != null) return _applyTranslation(antikBook);
+      }
+
+      if (!tracker.isOffline) {
+        final openLibBook = await _lookupOpenLibraryCombined(formats, tracker);
+        if (openLibBook != null) return _applyTranslation(openLibBook);
+      }
+
+      if (!tracker.isOffline) {
+        final molyResult = await _lookupMoly(primaryIsbn, tracker);
+        if (molyResult != null) return _applyTranslation(molyResult);
+      }
+
+      if (tracker.shouldThrowNetworkError) {
+        throw const NetworkException();
+      }
+      return null;
+    }
+
+    Book? partialBook;
+
     for (final format in formats) {
       final googleBook = await _lookupGoogleBooks(format, tracker);
-      if (googleBook != null) return _applyTranslation(googleBook);
-      if (tracker.isOffline) break;
+      if (googleBook != null) {
+        if (!_isMetadataIncomplete(googleBook)) {
+          return _applyTranslation(googleBook);
+        }
+        partialBook = googleBook;
+        break;
+      }
+      if (tracker.isOffline || tracker.googleRateLimited) break;
     }
 
-    // 1.2 Open Library Direct ISBN API (egyetlen kérésben az összes ISBN formátum)
     if (!tracker.isOffline) {
-      final openLibBook = await _lookupOpenLibraryBatch(formats, tracker);
-      if (openLibBook != null) return _applyTranslation(openLibBook);
+      final openLibBook = await _lookupOpenLibraryCombined(formats, tracker);
+      if (openLibBook != null) {
+        final merged = partialBook != null
+            ? _mergeBooks(partialBook, openLibBook)
+            : openLibBook;
+        return _applyTranslation(merged);
+      }
     }
 
-    // 1.3 Open Library Search API (szélesebb angol/nemzetközi találatok)
-    if (!tracker.isOffline) {
-      final searchResult = await _searchOpenLibrary(formats.first, tracker);
-      if (searchResult != null) return _applyTranslation(searchResult);
+    if (partialBook != null) {
+      return _applyTranslation(partialBook);
     }
 
-    // ══════════════════════════════════════════════════════════════════
-    // 2. FÁZIS: Magyar tartalék (Moly.hu — csak ha az angol API-kban nincs)
-    // ══════════════════════════════════════════════════════════════════
     if (!tracker.isOffline) {
-      final molyResult = await _lookupMoly(isbn, tracker);
+      final booklineBook = await _lookupBookline(primaryIsbn, tracker);
+      if (booklineBook != null) return _applyTranslation(booklineBook);
+    }
+
+    if (!tracker.isOffline) {
+      final antikBook = await _lookupAntikvarium(primaryIsbn, tracker);
+      if (antikBook != null) return _applyTranslation(antikBook);
+    }
+
+    if (!tracker.isOffline) {
+      final molyResult = await _lookupMoly(primaryIsbn, tracker);
       if (molyResult != null) return _applyTranslation(molyResult);
     }
 
@@ -82,22 +122,50 @@ class BookApiService {
     return null;
   }
 
-  /// Biztosítja, hogy a 13 jegyű ISBN-ek megelőzzék a 10 jegyűeket a gyorsabb találat érdekében.
+  bool _isMetadataIncomplete(Book book) {
+    final hasAuthor = book.authors != null && book.authors!.trim().isNotEmpty;
+    final hasCover = book.coverUrl != null && book.coverUrl!.trim().isNotEmpty;
+    return !hasAuthor || !hasCover;
+  }
+
+  Book _mergeBooks(Book primary, Book secondary) {
+    String? pickStr(String? a, String? b) =>
+        (a != null && a.trim().isNotEmpty) ? a : b;
+
+    final primaryTitleValid =
+        primary.title.trim().isNotEmpty && primary.title != 'Ismeretlen cím';
+
+    return primary.copyWith(
+      title: primaryTitleValid ? primary.title : secondary.title,
+      subtitle: pickStr(primary.subtitle, secondary.subtitle),
+      authors: pickStr(primary.authors, secondary.authors),
+      publisher: pickStr(primary.publisher, secondary.publisher),
+      publishedDate: pickStr(primary.publishedDate, secondary.publishedDate),
+      description: pickStr(primary.description, secondary.description),
+      pageCount: primary.pageCount ?? secondary.pageCount,
+      categories: pickStr(primary.categories, secondary.categories),
+      coverUrl: pickStr(primary.coverUrl, secondary.coverUrl),
+      externalRating: primary.externalRating ?? secondary.externalRating,
+      externalRatingCount:
+          primary.externalRatingCount ?? secondary.externalRatingCount,
+      externalRatingSource:
+          pickStr(primary.externalRatingSource, secondary.externalRatingSource),
+      originalTitle: pickStr(primary.originalTitle, secondary.originalTitle),
+      romajiTitle: pickStr(primary.romajiTitle, secondary.romajiTitle),
+      originalAuthor: pickStr(primary.originalAuthor, secondary.originalAuthor),
+    );
+  }
+
   List<String> _prioritizeIsbn13(List<String> formats) {
     final sorted = List<String>.from(formats);
     sorted.sort((a, b) => b.length.compareTo(a.length));
     return sorted;
   }
 
-  /// Könyvek online keresése cím, szerző vagy kulcsszó alapján.
-  ///
-  /// Először a Google Books API-t használja, szükség esetén az Open Library Search API-ra tér át.
-  /// [NetworkException] kivételt dob, ha a keresés internetkapcsolat hiánya miatt meghiúsul.
   Future<List<Book>> searchBooksOnline(String query) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return [];
 
-    // Ha a felhasználó érvényes ISBN-t írt a keresőmezőbe, a gyors ISBN-lekérdezést futtatjuk
     final normalizedIsbn = IsbnValidator.normalize(trimmed);
     if (normalizedIsbn != null && IsbnValidator.isValid(normalizedIsbn)) {
       final exact = await lookupByIsbn(normalizedIsbn);
@@ -108,7 +176,6 @@ class BookApiService {
     final results = <Book>[];
     final seenIsbns = <String>{};
 
-    // 1. Google Books keresés (angol/nemzetközi API)
     try {
       final response = await _dio.get(
         'https://www.googleapis.com/books/v1/volumes',
@@ -116,7 +183,6 @@ class BookApiService {
           'q': trimmed,
           'maxResults': 15,
           'printType': 'books',
-          if (_googleBooksApiKey != null) 'key': _googleBooksApiKey,
         },
       );
       tracker.recordSuccess();
@@ -140,7 +206,6 @@ class BookApiService {
 
     if (results.isNotEmpty) return results;
 
-    // 2. Tartalék: Open Library Search API
     if (!tracker.isOffline) {
       try {
         final response = await _dio.get(
@@ -172,14 +237,21 @@ class BookApiService {
       }
     }
 
+    if (results.isEmpty && !tracker.isOffline) {
+      final booklineResults = await _searchBooklineOnline(trimmed, tracker);
+      for (final book in booklineResults) {
+        if (seenIsbns.add(book.isbn)) {
+          results.add(book);
+        }
+      }
+    }
+
     if (results.isEmpty && tracker.shouldThrowNetworkError) {
       throw const NetworkException();
     }
 
     return results;
   }
-
-  // ── Google Books API ──
 
   Future<Book?> _lookupGoogleBooks(
     String isbn,
@@ -188,10 +260,7 @@ class BookApiService {
     try {
       final response = await _dio.get(
         'https://www.googleapis.com/books/v1/volumes',
-        queryParameters: {
-          'q': 'isbn:$isbn',
-          if (_googleBooksApiKey != null) 'key': _googleBooksApiKey,
-        },
+        queryParameters: {'q': 'isbn:$isbn'},
       );
       tracker.recordSuccess();
 
@@ -208,7 +277,12 @@ class BookApiService {
 
       return _parseGoogleVolumeItem(firstItem, explicitIsbn: isbn);
     } on DioException catch (e) {
-      tracker.recordDioError(e);
+      if (e.response?.statusCode == 429 || e.response?.statusCode == 403) {
+        tracker.googleRateLimited = true;
+        tracker.recordSuccess();
+      } else {
+        tracker.recordDioError(e);
+      }
       return null;
     } catch (e) {
       debugPrint('Google Books lekérdezési hiba: $e');
@@ -223,7 +297,6 @@ class BookApiService {
     final volumeInfo = item['volumeInfo'] as Map<String, dynamic>?;
     if (volumeInfo == null) return null;
 
-    // ISBN-13 (előnyben részesített) vagy ISBN-10 kinyerése
     String? resolvedIsbn = explicitIsbn;
     if (resolvedIsbn == null) {
       final identifiers = volumeInfo['industryIdentifiers'] as List<dynamic>?;
@@ -249,7 +322,6 @@ class BookApiService {
     resolvedIsbn ??=
         'LOCAL-GB-${volumeId ?? DateTime.now().millisecondsSinceEpoch}';
 
-    // Borítókép URL kinyerése (nagyobb felbontás előnyben részesítve)
     String? coverUrl;
     final imageLinks = volumeInfo['imageLinks'] as Map<String, dynamic>?;
     if (imageLinks != null) {
@@ -289,7 +361,45 @@ class BookApiService {
     );
   }
 
-  // ── Open Library Books API (kötegelt ISBN-13 + ISBN-10 lekérdezés 1 kérésben) ──
+  Future<Book?> _lookupOpenLibraryCombined(
+    List<String> formats,
+    _RequestHealthTracker tracker,
+  ) async {
+    if (formats.isEmpty) return null;
+
+    final editionBook = await _lookupOpenLibraryBatch(formats, tracker);
+    if (editionBook != null) {
+      final needsEnrichment =
+          (editionBook.authors == null || editionBook.authors!.isEmpty) ||
+              (editionBook.categories == null ||
+                  editionBook.categories!.isEmpty) ||
+              editionBook.externalRating == null;
+
+      if (needsEnrichment && !tracker.isOffline) {
+        final searchBook = await _searchOpenLibrary(formats.first, tracker);
+        if (searchBook != null) {
+          return _mergeOpenLibraryBooks(editionBook, searchBook);
+        }
+      }
+      return editionBook;
+    }
+
+    if (!tracker.isOffline) {
+      return _searchOpenLibrary(formats.first, tracker);
+    }
+    return null;
+  }
+
+  Book _mergeOpenLibraryBooks(Book editionBook, Book searchBook) {
+    final merged = _mergeBooks(editionBook, searchBook);
+    if (!_isJapanese(editionBook.title) && _isJapanese(searchBook.title)) {
+      return merged.copyWith(
+        title: editionBook.title,
+        originalTitle: editionBook.originalTitle ?? searchBook.title,
+      );
+    }
+    return merged;
+  }
 
   Future<Book?> _lookupOpenLibraryBatch(
     List<String> formats,
@@ -331,8 +441,6 @@ class BookApiService {
     }
   }
 
-  // ── Open Library Search API (szélesebb lefedettség mangákhoz, képregényekhez stb.) ──
-
   Future<Book?> _searchOpenLibrary(
     String isbn,
     _RequestHealthTracker tracker,
@@ -370,7 +478,429 @@ class BookApiService {
     }
   }
 
-  // ── Moly.hu (magyar adatbázis tartalék HTML feldolgozó — VÉGSŐ tartalék) ──
+  Future<Book?> _lookupBookline(
+    String isbn,
+    _RequestHealthTracker tracker,
+  ) async {
+    try {
+      final response = await _dio.get(
+        'https://bookline.hu/search/search.action',
+        queryParameters: {'searchfield': isbn},
+        options: Options(
+          responseType: ResponseType.plain,
+          followRedirects: true,
+          sendTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 4),
+          validateStatus: (status) => (status ?? 500) < 500,
+          headers: {
+            'Accept':
+                'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'hu-HU,hu;q=0.9,en-US;q=0.8,en;q=0.7',
+          },
+        ),
+      );
+      tracker.recordSuccess();
+
+      final rawData = response.data;
+      if (rawData is! String || rawData.isEmpty) return null;
+      final html = rawData;
+
+      if (html.contains('nem találtunk a keresésnek megfelelő') ||
+          html.contains('Nincs találat')) {
+        return null;
+      }
+
+      if (html.contains('itemprop="sku"')) {
+        return _parseBooklineProductPage(isbn, html);
+      }
+
+      final cardIdx = html.indexOf('t-product-detailed');
+      if (cardIdx == -1) return null;
+      final cardEnd =
+          (cardIdx + 6000 < html.length) ? cardIdx + 6000 : html.length;
+      final cardHtml = html.substring(cardIdx, cardEnd);
+
+      final parsedCard = _parseBooklineCard(cardHtml, explicitIsbn: isbn);
+      if (parsedCard == null) return null;
+
+      final book = parsedCard.$1;
+      final productPath = parsedCard.$2;
+
+      if (productPath != null && productPath.isNotEmpty) {
+        try {
+          final detailResp = await _dio.get(
+            'https://bookline.hu$productPath',
+            options: Options(
+              responseType: ResponseType.plain,
+              sendTimeout: const Duration(seconds: 3),
+              receiveTimeout: const Duration(seconds: 3),
+              validateStatus: (status) => (status ?? 500) < 500,
+              headers: {
+                'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+                'Accept-Language': 'hu-HU,hu;q=0.9',
+              },
+            ),
+          );
+          if (detailResp.data is String) {
+            final detailHtml = detailResp.data as String;
+
+            final skuMatch =
+                RegExp(r'<span itemprop="sku">\s*([0-9Xx-]+)\s*</span>')
+                    .firstMatch(detailHtml);
+            if (skuMatch != null) {
+              final pageSku = IsbnValidator.normalize(skuMatch.group(1)!) ??
+                  skuMatch.group(1)!;
+              final allowedFormats = IsbnValidator.getAllFormats(isbn);
+              if (allowedFormats.isNotEmpty &&
+                  !allowedFormats.contains(pageSku)) {
+                return null;
+              }
+            }
+
+            return _enrichBookFromBooklineDetail(book, detailHtml);
+          }
+        } catch (_) {}
+      }
+
+      return book;
+    } on DioException catch (e) {
+      tracker.recordDioError(e);
+      return null;
+    } catch (e) {
+      debugPrint('Bookline lekérdezési hiba: $e');
+      return null;
+    }
+  }
+
+  Future<List<Book>> _searchBooklineOnline(
+    String query,
+    _RequestHealthTracker tracker,
+  ) async {
+    try {
+      final response = await _dio.get(
+        'https://bookline.hu/search/search.action',
+        queryParameters: {'searchfield': query},
+        options: Options(
+          responseType: ResponseType.plain,
+          sendTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 4),
+          validateStatus: (status) => (status ?? 500) < 500,
+        ),
+      );
+      tracker.recordSuccess();
+
+      final rawData = response.data;
+      if (rawData is! String || rawData.isEmpty) return const [];
+      if (rawData.contains('nem találtunk a keresésnek megfelelő')) {
+        return const [];
+      }
+
+      final results = <Book>[];
+      final parts = rawData.split('t-product-detailed');
+      for (int i = 1; i < parts.length && results.length < 10; i++) {
+        final snippet = parts[i].length > 6000
+            ? parts[i].substring(0, 6000)
+            : parts[i];
+        final parsed = _parseBooklineCard(snippet, indexSeed: i);
+        if (parsed != null) {
+          results.add(parsed.$1);
+        }
+      }
+      return results;
+    } on DioException catch (e) {
+      tracker.recordDioError(e);
+      return const [];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  (Book, String?)? _parseBooklineCard(
+    String cardHtml, {
+    String? explicitIsbn,
+    int indexSeed = 0,
+  }) {
+    final titleMatch = RegExp(
+      r'class="[^"]*o-product__title[^"]*"[^>]*>\s*([^<\s][^<]*)\s*<',
+    ).firstMatch(cardHtml);
+    if (titleMatch == null) return null;
+
+    final rawTitle = _decodeHtmlEntities(titleMatch.group(1) ?? '').trim();
+    if (rawTitle.isEmpty) return null;
+
+    final authorMatch = RegExp(
+      r'class="[^"]*o-product__author[^"]*"[^>]*>\s*([^<\s][^<]*)\s*<',
+    ).firstMatch(cardHtml);
+    final rawAuthor = _decodeHtmlEntities(authorMatch?.group(1) ?? '').trim();
+
+    final linkMatch = RegExp(
+      r'href="(/product/home\.action\?[^"]+)"',
+    ).firstMatch(cardHtml);
+    final productPath =
+        linkMatch != null ? _decodeHtmlEntities(linkMatch.group(1)!) : null;
+
+    String? publisher;
+    String? publishedDate;
+    final pubMatch = RegExp(
+      r'<div class="o-product__publisher">\s*([^<]+)\s*</div>',
+    ).firstMatch(cardHtml);
+    if (pubMatch != null) {
+      final pubText = _decodeHtmlEntities(pubMatch.group(1) ?? '').trim();
+      final yearMatch = RegExp(r'^(.*),\s*(\d{4})$').firstMatch(pubText);
+      if (yearMatch != null) {
+        publisher = yearMatch.group(1)?.trim();
+        publishedDate = yearMatch.group(2)?.trim();
+      } else if (pubText.isNotEmpty) {
+        publisher = pubText;
+      }
+    }
+
+    String? coverUrl;
+    final hiResCoverMatch = RegExp(
+      r'(https://marvin\.bline\.hu/product_images/[^"\s,\]]+\.(?:JPG|jpg|jpeg|png|webp))',
+    ).firstMatch(cardHtml);
+    if (hiResCoverMatch != null) {
+      coverUrl = hiResCoverMatch.group(1);
+    } else {
+      final fallbackCoverMatch = RegExp(
+        r'src="(https://marvin\.bline\.hu/[^"]+\.(?:JPG|jpg|jpeg|png|webp))"',
+      ).firstMatch(cardHtml);
+      coverUrl = fallbackCoverMatch?.group(1);
+    }
+
+    double? externalRating;
+    int? externalRatingCount;
+    final starsMatch = RegExp(
+      r'data-stars="([0-9.]+)"(?:\s+data-favcount="(\d+)")?',
+    ).firstMatch(cardHtml);
+    if (starsMatch != null) {
+      final stars = double.tryParse(starsMatch.group(1) ?? '');
+      if (stars != null && stars > 0) {
+        externalRating = stars.clamp(0.0, 5.0);
+        externalRatingCount = int.tryParse(starsMatch.group(2) ?? '');
+      }
+    }
+
+    String? description;
+    final leadMatch = RegExp(
+      r'<p class="o-product__lead[^"]*">\s*([\s\S]*?)\s*</p>',
+    ).firstMatch(cardHtml);
+    if (leadMatch != null) {
+      final cleanedLead = _stripHtmlTags(leadMatch.group(1) ?? '').trim();
+      if (cleanedLead.isNotEmpty) {
+        description = cleanedLead;
+      }
+    }
+
+    final idMatch = RegExp(r'[?&]id=(\d+)').firstMatch(productPath ?? '');
+    final resolvedIsbn = explicitIsbn ??
+        'LOCAL-BL-${idMatch?.group(1) ?? '${DateTime.now().millisecondsSinceEpoch}-$indexSeed'}';
+
+    final book = Book(
+      isbn: resolvedIsbn,
+      title: rawTitle,
+      authors: rawAuthor.isEmpty ? null : rawAuthor,
+      publisher: (publisher != null && publisher.isNotEmpty) ? publisher : null,
+      publishedDate: publishedDate,
+      description: description,
+      coverUrl: coverUrl,
+      dateAdded: DateTime.now(),
+      externalRating: externalRating,
+      externalRatingCount: externalRatingCount,
+      externalRatingSource: externalRating != null ? 'Bookline' : null,
+    );
+
+    return (book, productPath);
+  }
+
+  Book? _parseBooklineProductPage(String isbn, String detailHtml) {
+    final skuMatch = RegExp(r'<span itemprop="sku">\s*([0-9Xx-]+)\s*</span>')
+        .firstMatch(detailHtml);
+    if (skuMatch != null) {
+      final pageSku =
+          IsbnValidator.normalize(skuMatch.group(1)!) ?? skuMatch.group(1)!;
+      final allowedFormats = IsbnValidator.getAllFormats(isbn);
+      if (allowedFormats.isNotEmpty && !allowedFormats.contains(pageSku)) {
+        return null;
+      }
+    }
+
+    final titleMatch = RegExp(
+      r'<h1[^>]*class="[^"]*o-product__title[^"]*"[^>]*>\s*([^<]+)\s*</h1>',
+    ).firstMatch(detailHtml);
+    final ogTitleMatch = RegExp(
+      r'<meta\s+property="og:title"\s+content="([^"]+)"',
+    ).firstMatch(detailHtml);
+
+    String title = _decodeHtmlEntities(
+      titleMatch?.group(1) ?? ogTitleMatch?.group(1) ?? '',
+    ).trim();
+    if (title.isEmpty) return null;
+
+    final authorMatch = RegExp(
+      r'class="[^"]*o-product__author[^"]*"[^>]*>\s*([^<\s][^<]*)\s*<',
+    ).firstMatch(detailHtml);
+    final author = _decodeHtmlEntities(authorMatch?.group(1) ?? '').trim();
+
+    final baseBook = Book(
+      isbn: isbn,
+      title: title,
+      authors: author.isEmpty ? null : author,
+      dateAdded: DateTime.now(),
+    );
+
+    return _enrichBookFromBooklineDetail(baseBook, detailHtml);
+  }
+
+  Book _enrichBookFromBooklineDetail(Book book, String detailHtml) {
+    int? pageCount = book.pageCount;
+    final pageMatch = RegExp(r'(\d{2,5})\s*oldal', caseSensitive: false)
+        .firstMatch(detailHtml);
+    if (pageMatch != null) {
+      pageCount = int.tryParse(pageMatch.group(1)!);
+    }
+
+    String? categories = book.categories;
+    final catMatch = RegExp(r'Kategória:\s*([^,"<]+)').firstMatch(detailHtml);
+    if (catMatch != null) {
+      final cat = _decodeHtmlEntities(catMatch.group(1)!.trim());
+      if (cat.isNotEmpty && !cat.toLowerCase().contains('ár:')) {
+        categories = cat;
+      }
+    }
+
+    String? description = book.description;
+    final ogDescMatch = RegExp(
+      r'<meta\s+property="og:description"\s+content="([^"]+)"\s*/?>',
+    ).firstMatch(detailHtml);
+    if (ogDescMatch != null) {
+      final fullDesc = _decodeHtmlEntities(ogDescMatch.group(1)!.trim());
+      if (fullDesc.isNotEmpty &&
+          (description == null || fullDesc.length > description.length)) {
+        description = fullDesc;
+      }
+    }
+
+    String? originalTitle = book.originalTitle;
+    final origTitleMatch =
+        RegExp(r'<li>\s*Eredeti cím:\s*([^<]+)</li>').firstMatch(detailHtml);
+    if (origTitleMatch != null) {
+      final orig = _decodeHtmlEntities(origTitleMatch.group(1)!.trim());
+      if (orig.isNotEmpty) {
+        originalTitle = orig;
+      }
+    }
+
+    String? coverUrl = book.coverUrl;
+    if (coverUrl == null || coverUrl.isEmpty) {
+      final ogImageMatch = RegExp(
+        r'<meta\s+property="og:image"\s+content="([^"]+)"',
+      ).firstMatch(detailHtml);
+      coverUrl = ogImageMatch?.group(1)?.replaceAll('http://', 'https://');
+    }
+
+    return book.copyWith(
+      pageCount: pageCount,
+      categories: categories,
+      description: description,
+      originalTitle: originalTitle,
+      coverUrl: coverUrl,
+    );
+  }
+
+  Future<Book?> _lookupAntikvarium(
+    String isbn,
+    _RequestHealthTracker tracker,
+  ) async {
+    try {
+      final response = await _dio.get(
+        'https://www.antikvarium.hu/html/elasticAutoComplete.php',
+        queryParameters: {
+          'type': 'advanced',
+          'keyword': isbn,
+        },
+        options: Options(
+          responseType: ResponseType.plain,
+          sendTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 4),
+          validateStatus: (status) => (status ?? 500) < 500,
+          headers: {
+            'Accept': 'text/html, */*;q=0.8',
+            'Accept-Language': 'hu-HU,hu;q=0.9',
+          },
+        ),
+      );
+      tracker.recordSuccess();
+
+      final rawData = response.data;
+      if (rawData is! String || !rawData.contains('itemprop="name"')) {
+        return null;
+      }
+
+      final titleMatch =
+          RegExp(r'<span itemprop="name">\s*([^<]+)\s*</span>')
+              .firstMatch(rawData);
+      if (titleMatch == null) return null;
+
+      final title = _decodeHtmlEntities(titleMatch.group(1) ?? '').trim();
+      if (title.isEmpty) return null;
+
+      final authorMatch =
+          RegExp(r'<span itemprop="author">\s*([^<]+)\s*</span>')
+              .firstMatch(rawData);
+      final author = _decodeHtmlEntities(authorMatch?.group(1) ?? '').trim();
+
+      String? coverUrl;
+      final bigCoverMatch = RegExp(
+        r'href="(https://cdn\.antikvarium\.hu/foto/nagy/[^"]+\.jpg)"',
+      ).firstMatch(rawData);
+      if (bigCoverMatch != null) {
+        coverUrl = bigCoverMatch.group(1);
+      } else {
+        final thumbMatch = RegExp(
+          r'data-original="(https://cdn\.antikvarium\.hu/foto/[^"]+\.jpg)"',
+        ).firstMatch(rawData);
+        coverUrl = thumbMatch?.group(1);
+      }
+
+      String? publisher;
+      String? publishedDate;
+      final infoBlockMatch = RegExp(
+        r'<div class="ad-ac-box-item-book-info">([\s\S]*?)</div>',
+      ).firstMatch(rawData);
+      if (infoBlockMatch != null) {
+        final spans = RegExp(r'<span(?:\s+[^>]*)?>\s*([^<]+)\s*</span>')
+            .allMatches(infoBlockMatch.group(1)!)
+            .map((m) => _decodeHtmlEntities(m.group(1) ?? '').trim())
+            .where((s) => s.isNotEmpty && s != title && s != author)
+            .toList();
+
+        for (final s in spans) {
+          if (RegExp(r'^\d{4}$').hasMatch(s)) {
+            publishedDate ??= s;
+          } else {
+            publisher ??= s;
+          }
+        }
+      }
+
+      return Book(
+        isbn: isbn,
+        title: title,
+        authors: author.isEmpty ? null : author,
+        publisher: publisher,
+        publishedDate: publishedDate,
+        coverUrl: coverUrl,
+        dateAdded: DateTime.now(),
+      );
+    } on DioException catch (e) {
+      tracker.recordDioError(e);
+      return null;
+    } catch (e) {
+      debugPrint('Antikvarium lekérdezési hiba: $e');
+      return null;
+    }
+  }
 
   Future<Book?> _lookupMoly(
     String isbn,
@@ -381,9 +911,10 @@ class BookApiService {
         'https://moly.hu/kereses',
         queryParameters: {'q': isbn},
         options: Options(
+          responseType: ResponseType.plain,
           followRedirects: true,
-          sendTimeout: const Duration(seconds: 6),
-          receiveTimeout: const Duration(seconds: 6),
+          sendTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 4),
           validateStatus: (status) => (status ?? 500) < 500,
           headers: {
             'User-Agent':
@@ -404,16 +935,12 @@ class BookApiService {
         return null;
       }
 
-      // Cím és szerző kinyerése a <title> elemből
-      // Formátum közvetlen könyvoldalon: "Szerző: Cím · Moly" vagy "Cím · Moly"
       var titleMatch =
           RegExp(r'<title>(.*?) · Moly<\/title>').firstMatch(html);
       if (titleMatch == null) return null;
 
       var pageTitle = _decodeHtmlEntities(titleMatch.group(1) ?? '').trim();
 
-      // Ha a Moly találati listát ("Keresés") adott vissza átirányítás helyett,
-      // követjük az első /konyvek/... hivatkozást, ha van ilyen.
       if (pageTitle.isEmpty || pageTitle.startsWith('Keresés')) {
         final bookLinkMatch =
             RegExp(r'href="(\/konyvek\/[^"#?]+)"').firstMatch(html);
@@ -423,8 +950,9 @@ class BookApiService {
         final bookPageResp = await _dio.get(
           'https://moly.hu$bookPath',
           options: Options(
-            sendTimeout: const Duration(seconds: 5),
-            receiveTimeout: const Duration(seconds: 5),
+            responseType: ResponseType.plain,
+            sendTimeout: const Duration(seconds: 4),
+            receiveTimeout: const Duration(seconds: 4),
             validateStatus: (status) => (status ?? 500) < 500,
           ),
         );
@@ -445,13 +973,11 @@ class BookApiService {
         title = parts.sublist(1).join(': ').trim();
       }
 
-      // Borítókép URL kinyerése
       final coverMatch = RegExp(
               r'(https:\/\/moly\.hu\/system\/covers\/big\/.*?\.jpg)')
           .firstMatch(html);
       final String? coverUrl = coverMatch?.group(1);
 
-      // Közösségi értékelés kinyerése, ha elérhető (a Moly százalékot használ, pl. 93%)
       double? externalRating;
       final ratingMatch = RegExp(r'(\d+)%<\/span>').firstMatch(html);
       if (ratingMatch != null) {
@@ -479,8 +1005,13 @@ class BookApiService {
     }
   }
 
+  String _stripHtmlTags(String htmlText) {
+    final withoutTags = htmlText.replaceAll(RegExp(r'<[^>]*>'), ' ');
+    return _decodeHtmlEntities(withoutTags).replaceAll(RegExp(r'\s+'), ' ');
+  }
+
   String _decodeHtmlEntities(String input) {
-    return input
+    var result = input
         .replaceAll('&amp;', '&')
         .replaceAll('&quot;', '"')
         .replaceAll('&#39;', "'")
@@ -491,6 +1022,17 @@ class BookApiService {
         .replaceAll('&ndash;', '–')
         .replaceAll('&mdash;', '—')
         .replaceAll('&nbsp;', ' ');
+
+    result = result.replaceAllMapped(RegExp(r'&#(\d+);'), (match) {
+      final code = int.tryParse(match.group(1) ?? '');
+      return code != null ? String.fromCharCode(code) : match.group(0)!;
+    });
+    result = result.replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'), (match) {
+      final code = int.tryParse(match.group(1) ?? '', radix: 16);
+      return code != null ? String.fromCharCode(code) : match.group(0)!;
+    });
+
+    return result;
   }
 
   Book? _parseOpenLibrarySearchDoc(
@@ -560,8 +1102,6 @@ class BookApiService {
     );
   }
 
-  // ── Közös Open Library adatfeldolgozás ──
-
   Future<Book?> _parseOpenLibraryDetails(
     String isbn,
     Map<String, dynamic> entry,
@@ -590,7 +1130,9 @@ class BookApiService {
 
     String? coverUrl = entry['thumbnail_url'] as String?;
     if (coverUrl != null) {
-      coverUrl = coverUrl.replaceAll('-S.jpg', '-L.jpg');
+      coverUrl = coverUrl
+          .replaceAll('-S.jpg', '-L.jpg')
+          .replaceAll('http://', 'https://');
     }
     coverUrl ??= _buildOpenLibraryCoverUrl(isbn);
 
@@ -633,12 +1175,13 @@ class BookApiService {
       isbn: isbn,
       title: details['title'] as String? ?? 'Ismeretlen cím',
       subtitle: details['subtitle'] as String?,
-      authors: authors,
+      authors: (authors != null && authors.isNotEmpty) ? authors : null,
       publisher: publisher,
       publishedDate: details['publish_date'] as String?,
       description: description,
       pageCount: pageCount,
-      categories: categories,
+      categories:
+          (categories != null && categories.isNotEmpty) ? categories : null,
       coverUrl: coverUrl,
       dateAdded: DateTime.now(),
       externalRating: externalRating,
@@ -659,7 +1202,6 @@ class BookApiService {
     }
   }
 
-  /// Közösségi értékelések lekérése az Open Library értékelési API-jából (rövid, 2 mp-es időkorláttal).
   Future<(double, int)?> _fetchOpenLibraryRatings(String worksKey) async {
     try {
       final response = await _dio.get(
@@ -688,25 +1230,12 @@ class BookApiService {
     return 'https://covers.openlibrary.org/b/isbn/$isbn-L.jpg';
   }
 
-  Future<bool> isCoverAvailable(String url) async {
-    try {
-      final response = await _dio.head(url);
-      final contentLength =
-          int.tryParse(response.headers.value('content-length') ?? '0') ?? 0;
-      return contentLength > 1000;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  // ── Fordítás és latin betűs átírás (Romanizáció) ──
-
   Future<Book> _applyTranslation(Book book) async {
-    String? originalTitle;
-    String? romajiTitle;
+    String? originalTitle = book.originalTitle;
+    String? romajiTitle = book.romajiTitle;
     String newTitle = book.title;
 
-    String? originalAuthor;
+    String? originalAuthor = book.originalAuthor;
     String? newAuthor = book.authors;
 
     if (_isJapanese(book.title)) {
@@ -863,6 +1392,7 @@ class _RequestHealthTracker {
   bool hadSuccessResponse = false;
   bool hadNetworkFailure = false;
   bool isOffline = false;
+  bool googleRateLimited = false;
 
   void recordSuccess() {
     hadSuccessResponse = true;

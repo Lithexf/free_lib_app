@@ -1,5 +1,3 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Az INTERNET jogosultság szükséges a fejlesztéshez (hibakeresés, hot reload),
-         valamint az online könyvadatbázisok eléréséhez. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 </manifest>

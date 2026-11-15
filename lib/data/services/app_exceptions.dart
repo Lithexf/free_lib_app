@@ -1,4 +1,3 @@
-/// Alap kivételosztály a FreeLib alkalmazás üzleti és infrastrukturális hibáihoz.
 sealed class AppException implements Exception {
   final String userMessage;
   final Object? cause;
@@ -9,8 +8,6 @@ sealed class AppException implements Exception {
   String toString() => userMessage;
 }
 
-/// Akkor keletkezik, ha egy külső API hívás hiányzó internetkapcsolat,
-/// DNS-hiba vagy időtúllépés miatt meghiúsul.
 class NetworkException extends AppException {
   const NetworkException([
     super.userMessage =
@@ -19,7 +16,6 @@ class NetworkException extends AppException {
   ]) : super(cause: cause);
 }
 
-/// Akkor keletkezik, ha egy külső szolgáltatás váratlan hibaválaszt ad vissza.
 class ApiLookupException extends AppException {
   const ApiLookupException([
     super.userMessage =
@@ -28,7 +24,6 @@ class ApiLookupException extends AppException {
   ]) : super(cause: cause);
 }
 
-/// Akkor keletkezik, ha olyan könyvet próbálunk beszúrni, amelynek ISBN száma már szerepel a könyvtárban.
 class DuplicateBookException extends AppException {
   final String isbn;
   final String existingTitle;
@@ -39,7 +34,6 @@ class DuplicateBookException extends AppException {
   }) : super('A(z) „$existingTitle” (ISBN: $isbn) már szerepel a könyvtáradban.');
 }
 
-/// Akkor keletkezik, ha egy helyi SQLite adatbázis-művelet meghiúsul.
 class StorageException extends AppException {
   const StorageException([
     super.userMessage = 'Adatbázis hiba történt a művelet közben.',

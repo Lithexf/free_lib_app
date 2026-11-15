@@ -1,7 +1,3 @@
-/// A FreeLib alkalmazás központi könyv (Book) adatmodellje.
-///
-/// Egyetlen könyvet reprezentál a felhasználó saját könyvtárában, beleértve
-/// az API-kból letöltött metaadatokat és a saját adatokat (értékelés, haladás, állapot).
 class Book {
   static const Object _unset = Object();
 
@@ -18,30 +14,16 @@ class Book {
   final String? categories;
   final String? coverUrl;
   final double? rating;
-  final String status; // A ReadingStatus.name szöveges értéke
+  final String status;
   final DateTime dateAdded;
   final DateTime? dateStarted;
   final DateTime? dateFinished;
   final String? notes;
-
-  // ── Eredeti (japán) metaadatok ──
-  /// Az eredeti japán cím (kereséshez eltárolva)
   final String? originalTitle;
-
-  /// A latin betűsre átírt (Romaji) cím (kereséshez és megjelenítéshez)
   final String? romajiTitle;
-
-  /// Az eredeti japán szerző neve (kereséshez eltárolva)
   final String? originalAuthor;
-
-  // ── Külső (közösségi) értékelési adatok ──
-  /// Átlagos értékelés külső forrásból (Google Books / Open Library / Moly.hu), 1.0–5.0 skálán
   final double? externalRating;
-
-  /// Értékelések száma a külső forrásban
   final int? externalRatingCount;
-
-  /// A külső értékelés forrásának neve (pl. "Google Books", "Open Library", "Moly.hu")
   final String? externalRatingSource;
 
   const Book({
@@ -71,7 +53,6 @@ class Book {
     this.externalRatingSource,
   });
 
-  /// Visszaadja az olvasási haladást 0.0 és 1.0 között, ha az oldalszám és az aktuális oldal meg van adva.
   double? get readingProgress {
     if (pageCount == null || pageCount! <= 0) return null;
     if (status == 'completed') return 1.0;
@@ -79,10 +60,8 @@ class Book {
     return (currentPage! / pageCount!).clamp(0.0, 1.0);
   }
 
-  /// Igaz, ha az ISBN helyileg lett generálva egy vonalkód nélkül, kézzel felvett könyvhöz.
   bool get isManualIsbn => isbn.startsWith('LOCAL-');
 
-  /// Könyv példány létrehozása kulcs-érték térképből (adatbázis sorból vagy API válaszból).
   factory Book.fromMap(Map<String, dynamic> map) {
     return Book(
       id: map['id'] as int?,
@@ -122,7 +101,6 @@ class Book {
     );
   }
 
-  /// Átalakítás kulcs-érték térképpé adatbázisba történő mentéshez.
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id,
@@ -152,8 +130,6 @@ class Book {
     };
   }
 
-  /// Másolat készítése módosított mezőkkel.
-  /// Támogatja a `null` explicit átadását az opcionális mezők törléséhez.
   Book copyWith({
     int? id,
     String? isbn,
@@ -184,20 +160,27 @@ class Book {
       id: id ?? this.id,
       isbn: isbn ?? this.isbn,
       title: title ?? this.title,
-      subtitle: identical(subtitle, _unset) ? this.subtitle : subtitle as String?,
+      subtitle:
+          identical(subtitle, _unset) ? this.subtitle : subtitle as String?,
       authors: identical(authors, _unset) ? this.authors : authors as String?,
-      publisher: identical(publisher, _unset) ? this.publisher : publisher as String?,
+      publisher:
+          identical(publisher, _unset) ? this.publisher : publisher as String?,
       publishedDate: identical(publishedDate, _unset)
           ? this.publishedDate
           : publishedDate as String?,
-      description:
-          identical(description, _unset) ? this.description : description as String?,
-      pageCount: identical(pageCount, _unset) ? this.pageCount : pageCount as int?,
-      currentPage:
-          identical(currentPage, _unset) ? this.currentPage : currentPage as int?,
-      categories:
-          identical(categories, _unset) ? this.categories : categories as String?,
-      coverUrl: identical(coverUrl, _unset) ? this.coverUrl : coverUrl as String?,
+      description: identical(description, _unset)
+          ? this.description
+          : description as String?,
+      pageCount:
+          identical(pageCount, _unset) ? this.pageCount : pageCount as int?,
+      currentPage: identical(currentPage, _unset)
+          ? this.currentPage
+          : currentPage as int?,
+      categories: identical(categories, _unset)
+          ? this.categories
+          : categories as String?,
+      coverUrl:
+          identical(coverUrl, _unset) ? this.coverUrl : coverUrl as String?,
       rating: identical(rating, _unset) ? this.rating : rating as double?,
       status: status ?? this.status,
       dateAdded: dateAdded ?? this.dateAdded,

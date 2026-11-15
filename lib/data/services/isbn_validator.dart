@@ -1,67 +1,73 @@
-/// ISBN-10 és ISBN-13 ellenőrző és átalakító segédosztály.
-///
-/// Ellenőrzi az ellenőrző számjegyet (checksum), hogy a beolvasott vonalkódok
-/// valódi ISBN számok legyenek az API hívások előtt. Kezeli az EAN-13 könyv-vonalkódokat
-/// és rugalmas normalizálást biztosít a kopott vagy sérült vonalkódokhoz is.
 class IsbnValidator {
   IsbnValidator._();
 
-  /// Igazat ad vissza, ha a megadott karakterlánc érvényes ISBN (10 vagy 13 számjegyű).
+  static String _cleanAndStripAddon(String raw) {
+    final cleaned = raw.replaceAll(RegExp(r'[^0-9Xx]'), '').toUpperCase();
+    if ((cleaned.length == 15 || cleaned.length == 18) &&
+        (cleaned.startsWith('978') || cleaned.startsWith('979')) &&
+        RegExp(r'^[0-9]+$').hasMatch(cleaned)) {
+      return cleaned.substring(0, 13);
+    }
+    return cleaned;
+  }
+
   static bool isValid(String isbn) {
-    final cleaned = isbn.replaceAll(RegExp(r'[^0-9Xx]'), '');
+    final cleaned = _cleanAndStripAddon(isbn);
     if (cleaned.length == 10) return _isValidIsbn10(cleaned);
     if (cleaned.length == 13) return _isValidIsbn13(cleaned);
     return false;
   }
 
-  /// Igazat ad vissza, ha a karakterlánc könyv-vonalkódnak tűnik.
-  /// Megengedőbb, mint az [isValid] — elfogadja a 978/979 előtagú EAN-13 kódokat
-  /// akkor is, ha az ellenőrző számjegy sérült (gyakori a kopott vonalkódoknál).
   static bool isLikelyBookBarcode(String code) {
-    final cleaned = code.replaceAll(RegExp(r'[^0-9Xx]'), '');
+    final cleaned = _cleanAndStripAddon(code);
 
-    // Szabványos ISBN-10 vagy ISBN-13 érvényes ellenőrző összeggel
     if (isValid(cleaned)) return true;
 
-    // 978-cal vagy 979-cel kezdődő EAN-13 (könyv-vonalkód előtag),
-    // még ha az ellenőrző összeg kissé eltér is (sérült vonalkód)
     if (cleaned.length == 13 &&
-        (cleaned.startsWith('978') || cleaned.startsWith('979'))) {
+        (cleaned.startsWith('978') || cleaned.startsWith('979')) &&
+        RegExp(r'^[0-9]{13}$').hasMatch(cleaned)) {
       return true;
     }
 
-    // 10 jegyű karakterlánc, amely ISBN-10 lehet (megengedő ellenőrzés)
     if (cleaned.length == 10) {
       final body = cleaned.substring(0, 9);
-      if (RegExp(r'^[0-9]+$').hasMatch(body)) return true;
+      final last = cleaned[9];
+      if (RegExp(r'^[0-9]{9}$').hasMatch(body) &&
+          RegExp(r'^[0-9X]$').hasMatch(last)) {
+        return true;
+      }
     }
 
     return false;
   }
 
-  /// ISBN normalizálása: kötőjelek és szóközök eltávolítása, majd ellenőrzés.
-  /// Érvénytelen bemenet esetén `null` értéket ad vissza.
-  ///
-  /// Megengedő módot használ: elfogadja a valószínű könyv-vonalkódokat kisebb
-  /// ellenőrzőösszeg-hibák esetén is (kopott/sérült vonalkódok).
   static String? normalize(String isbn) {
-    final cleaned = isbn.replaceAll(RegExp(r'[^0-9Xx]'), '');
+    final cleaned = _cleanAndStripAddon(isbn);
 
-    // Elsőként szigorú ellenőrzés
     if (isValid(cleaned)) return cleaned;
 
-    // Megengedő mód: 978/979-es EAN-13 könyv-vonalkódok elfogadása hibás ellenőrző összeggel is
     if (cleaned.length == 13 &&
-        (cleaned.startsWith('978') || cleaned.startsWith('979'))) {
+        (cleaned.startsWith('978') || cleaned.startsWith('979')) &&
+        RegExp(r'^[0-9]{13}$').hasMatch(cleaned)) {
       return cleaned;
     }
 
     return null;
   }
 
-  /// ISBN-10 átalakítása ISBN-13 formátumra.
+  static bool isHungarianIsbn(String isbn) {
+    final cleaned = _cleanAndStripAddon(isbn);
+    if (cleaned.length == 13) {
+      return cleaned.startsWith('978963') || cleaned.startsWith('978615');
+    }
+    if (cleaned.length == 10) {
+      return cleaned.startsWith('963') || cleaned.startsWith('615');
+    }
+    return false;
+  }
+
   static String? isbn10to13(String isbn10) {
-    final cleaned = isbn10.replaceAll(RegExp(r'[^0-9Xx]'), '');
+    final cleaned = _cleanAndStripAddon(isbn10);
     if (cleaned.length != 10) return null;
 
     final body = cleaned.substring(0, 9);
@@ -80,14 +86,17 @@ class IsbnValidator {
     return '$base$checkDigit';
   }
 
-  /// ISBN-13 átalakítása ISBN-10 formátumra (csak 978-as előtagú ISBN-eknél működik).
-  /// 979-es előtagú ISBN esetén `null` értéket ad vissza (nincs ISBN-10 megfelelője).
   static String? isbn13to10(String isbn13) {
-    final cleaned = isbn13.replaceAll(RegExp(r'[^0-9]'), '');
+    final cleaned = _cleanAndStripAddon(isbn13);
     if (cleaned.length != 13) return null;
-    if (!cleaned.startsWith('978')) return null; // A 979-es előtagnak nincs ISBN-10 alakja
+    if (!cleaned.startsWith('978')) return null;
 
-    final body = cleaned.substring(3, 12); // A 978 utáni 9 számjegy
+    final body = cleaned.substring(3, 12);
+    for (int i = 0; i < 9; i++) {
+      final code = body.codeUnitAt(i);
+      if (code < 48 || code > 57) return null;
+    }
+
     int sum = 0;
     for (int i = 0; i < 9; i++) {
       sum += int.parse(body[i]) * (10 - i);
@@ -97,12 +106,10 @@ class IsbnValidator {
     return '$body$checkChar';
   }
 
-  /// Egy ISBN összes formátumváltozatának (ISBN-10, ISBN-13 vagy mindkettő) lekérése.
-  /// Segít maximalizálni az API-keresések találati arányát.
   static List<String> getAllFormats(String isbn) {
     if (isbn.startsWith('LOCAL-')) return <String>[isbn];
 
-    final cleaned = isbn.replaceAll(RegExp(r'[^0-9Xx]'), '');
+    final cleaned = _cleanAndStripAddon(isbn);
     if (cleaned.isEmpty) return const <String>[];
     final formats = <String>{cleaned};
 
@@ -117,7 +124,6 @@ class IsbnValidator {
     return formats.toList();
   }
 
-  /// ISBN-10 ellenőrző összeg vizsgálata.
   static bool _isValidIsbn10(String isbn) {
     int sum = 0;
     for (int i = 0; i < 9; i++) {
@@ -126,7 +132,6 @@ class IsbnValidator {
       sum += (c - 48) * (10 - i);
     }
 
-    // Az utolsó karakter lehet 'X' is (amely 10-et jelent)
     final lastChar = isbn[9].toUpperCase();
     if (lastChar == 'X') {
       sum += 10;
@@ -139,7 +144,6 @@ class IsbnValidator {
     return sum % 11 == 0;
   }
 
-  /// ISBN-13 ellenőrző összeg vizsgálata.
   static bool _isValidIsbn13(String isbn) {
     int sum = 0;
     for (int i = 0; i < 12; i++) {

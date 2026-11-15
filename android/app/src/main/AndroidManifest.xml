@@ -3,8 +3,6 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <!-- Explicit tiltás galéria, képek, videók és külső tárhely olvasására/írására,
-         hogy az alkalmazás (és semmilyen beépülő modul) ne lássa a felhasználó képeit/galériáját -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove"/>
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove"/>
@@ -15,10 +13,6 @@
     <uses-feature android:name="android.hardware.camera" android:required="true"/>
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
 
-    <!-- allowBackup="false" és fullBackupContent="false": megakadályozza, hogy külső
-         folyamatok vagy felhőmentések hozzáférjenek a zárt, titkosított belső adatbázishoz.
-         Az icon, roundIcon és logo attribútumok biztosítják, hogy maga a telepítő .apk fájl
-         és a telepített alkalmazás is az icon.png-t jelenítse meg. -->
     <application
         android:label="FreeLib"
         android:name="${applicationName}"
@@ -51,8 +45,6 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-
-        <!-- Az ML Kit vonalkód-modell előzetes regisztrálása a gyors kameraindulásért -->
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="barcode"/>

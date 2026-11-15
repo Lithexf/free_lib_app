@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,7 +12,6 @@ import '../theme/app_colors.dart';
 import 'book_detail_screen.dart';
 import 'scanner_screen.dart';
 
-/// Könyv hozzáadása online kereséssel vagy kézi űrlappal, illetve meglévő könyv szerkesztése.
 class AddBookScreen extends ConsumerStatefulWidget {
   final String? initialIsbn;
   final int initialTabIndex;

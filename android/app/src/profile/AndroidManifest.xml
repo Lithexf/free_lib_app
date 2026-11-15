@@ -1,5 +1,3 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Az INTERNET jogosultság szükséges a teljesítményelemzéshez (profile mód)
-         és a futó alkalmazással való kommunikációhoz. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 </manifest>

@@ -1,4 +1,3 @@
-// Javítás a com.android.prefs.AndroidLocationsException hibára, ha az ANDROID_PREFS_ROOT és ANDROID_USER_HOME egyszerre van beállítva
 try {
     val processEnv = Class.forName("java.lang.ProcessEnvironment")
     val envField = processEnv.getDeclaredField("theEnvironment")
@@ -10,8 +9,7 @@ try {
     ciEnvField.isAccessible = true
     @Suppress("UNCHECKED_CAST")
     (ciEnvField.get(null) as? MutableMap<String, String>)?.remove("ANDROID_PREFS_ROOT")
-} catch (e: Throwable) {
-    // Figyelmen kívül hagyható nem Windows rendszeren vagy korlátozott reflexiónál
+} catch (_: Throwable) {
 }
 
 pluginManagement {

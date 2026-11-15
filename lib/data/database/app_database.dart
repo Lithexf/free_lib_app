@@ -8,19 +8,11 @@ import '../services/app_exceptions.dart';
 import '../services/isbn_validator.dart';
 import '../services/library_encryption_service.dart';
 
-/// SQLite adatbázis-kezelő segédosztály a FreeLib alkalmazáshoz.
-///
-/// A felhasználó könyvtárát az alkalmazás zárt, elszigetelt belső tárhelyén tárolja
-/// 256 bites ChaCha20 mezőszintű titkosítással, így külső alkalmazások nem tudják
-/// elolvasni vagy gyorsítótárazni az adatokat.
 class AppDatabase {
   static AppDatabase? _instance;
   static Database? _database;
   static const String _backupFileName = 'freelib_vault_backup.enc';
 
-  /// Memóriabeli gyorsítótár a már visszafejtett könyvekhez, hogy 300+ könyv esetén se kelljen
-  /// minden egyes keresési leütéskor újra visszafejteni a teljes adatbázist.
-  /// Minden írási művelet (insert / update / delete) azonnal érvényteleníti.
   List<Book>? _decryptedCache;
   Future<void> _snapshotQueue = Future.value();
 
@@ -41,7 +33,6 @@ class AppDatabase {
       await LibraryEncryptionService.instance.init();
 
       final dir = await getApplicationDocumentsDirectory();
-      // .nomedia fájl létrehozása a privát könyvtárban, hogy más appok / média-olvasók ne indexeljék
       final noMedia = File(p.join(dir.path, '.nomedia'));
       if (!await noMedia.exists()) {
         await noMedia.writeAsString('', flush: true);
@@ -55,9 +46,7 @@ class AppDatabase {
         onUpgrade: _onUpgrade,
       );
 
-      // Ha voltak korábban beszkennelt, még titkosítatlan könyvek, automatikusan titkosítjuk őket helyben
       await _encryptLegacyPlaintextRows(db);
-      // Ha újratelepítés után az SQLite tábla üres, de a megtartott titkosított mentésfájl létezik, automatikusan visszatöltjük
       await _restoreFromEncryptedSnapshotIfNeeded(db);
       await _writeEncryptedSnapshot(db);
       return db;
@@ -69,9 +58,6 @@ class AppDatabase {
     }
   }
 
-  /// Automatikusan elmenti a teljes könyvtár titkosított pillanatképét a belső tárolókba,
-  /// hogy újratelepítéskor (ha a felhasználó megtartja az alkalmazás adatait) 100%-osan visszaálljon.
-  /// Sorba állított és atomi (.tmp -> átnevezés) írást használ, hogy 300+ könyv esetén se sérülhessen a fájl.
   Future<void> _writeEncryptedSnapshot(Database db) {
     _snapshotQueue = _snapshotQueue.then((_) async {
       try {
@@ -103,8 +89,6 @@ class AppDatabase {
     await tmpFile.rename(targetPath);
   }
 
-  /// Ha az adatbázis üres, de a titkosított biztonsági mentés megtalálható az eszközön,
-  /// automatikusan visszatölti az összes korábban beszkennelt könyvet.
   Future<void> _restoreFromEncryptedSnapshotIfNeeded(Database db) async {
     try {
       final countResult =
@@ -145,8 +129,6 @@ class AppDatabase {
     } catch (_) {}
   }
 
-  /// Automatikusan titkosítja a korábbi verziókból származó, még nyílt szövegű könyvsorokat,
-  /// így a már beszkennelt könyvek adatvesztés nélkül átkerülnek a titkosított formátumba.
   Future<void> _encryptLegacyPlaintextRows(Database db) async {
     try {
       final rows = await db.query('books');
@@ -164,9 +146,7 @@ class AppDatabase {
           );
         }
       }
-    } catch (_) {
-      // Nem blokkoljuk az indulást, ha a migráció részlegesen már megtörtént
-    }
+    } catch (_) {}
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -240,9 +220,6 @@ class AppDatabase {
     return Book.fromMap(decrypted);
   }
 
-  // ── CRUD műveletek (Létrehozás, Olvasás, Frissítés, Törlés) ──
-
-  /// Új könyv beszúrása titkosított formában. Visszaadja az új sor azonosítóját.
   Future<int> insertBook(Book book) async {
     try {
       final existing = await getBookByIsbn(book.isbn);
@@ -271,7 +248,6 @@ class AppDatabase {
     }
   }
 
-  /// Meglévő könyv frissítése titkosított formában. Visszaadja az érintett sorok számát.
   Future<int> updateBook(Book book) async {
     if (book.id == null) {
       throw const StorageException('A frissítendő könyvnek nincs azonosítója.');
@@ -304,7 +280,6 @@ class AppDatabase {
     }
   }
 
-  /// Könyv törlése azonosító alapján. Visszaadja az érintett sorok számát.
   Future<int> deleteBook(int id) async {
     try {
       final db = await database;
@@ -321,7 +296,6 @@ class AppDatabase {
     }
   }
 
-  /// Egyetlen könyv lekérése azonosító alapján.
   Future<Book?> getBook(int id) async {
     try {
       final db = await database;
@@ -337,7 +311,6 @@ class AppDatabase {
     }
   }
 
-  /// Egyetlen könyv lekérése ISBN alapján (ISBN-10 és ISBN-13 változatokat is ellenőrizve).
   Future<Book?> getBookByIsbn(String isbn) async {
     try {
       final db = await database;
@@ -359,10 +332,6 @@ class AppDatabase {
     }
   }
 
-  // ── Lekérdezési műveletek ──
-
-  /// Egységes lekérdezés, amely támogatja a kombinált szöveges keresést, állapot-szűrést
-  /// és rendezést a memóriában visszafejtett könyveken, miközben a háttértáron minden titkosítva marad.
   Future<List<Book>> queryBooks({
     String? searchQuery,
     String? status,
@@ -432,29 +401,9 @@ class AppDatabase {
         return rA.compareTo(rB);
       });
     } else {
-      // Alapértelmezett rendezés: hozzáadás dátuma szerint csökkenő (date_added DESC)
       books.sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
     }
   }
-
-  Future<List<Book>> getAllBooks({
-    String orderBy = 'date_added DESC',
-  }) {
-    return queryBooks(orderBy: orderBy);
-  }
-
-  Future<List<Book>> getBooksByStatus(
-    String status, {
-    String orderBy = 'date_added DESC',
-  }) {
-    return queryBooks(status: status, orderBy: orderBy);
-  }
-
-  Future<List<Book>> searchBooks(String query) {
-    return queryBooks(searchQuery: query, orderBy: 'title ASC');
-  }
-
-  // ── Alkalmazás-beállítások (szintén titkosítva a háttértáron) ──
 
   Future<String?> getSetting(String key) async {
     try {
@@ -486,8 +435,6 @@ class AppDatabase {
       throw StorageException('Nem sikerült elmenteni a beállítást.', e);
     }
   }
-
-  // ── Statisztikai lekérdezések ──
 
   Future<int> getTotalBookCount() async {
     final db = await database;
