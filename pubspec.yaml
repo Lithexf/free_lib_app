@@ -1,5 +1,5 @@
 name: free_lib_app
-description: "FreeLib — Szkennelj vonalkódokat, és építsd fel a saját könyvtáradat."
+description: "FreeLib - Személyes könyvtárkezelő alkalmazás."
 publish_to: 'none'
 version: 1.0.0+1
 

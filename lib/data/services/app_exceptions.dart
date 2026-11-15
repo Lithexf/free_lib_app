@@ -31,7 +31,7 @@ class DuplicateBookException extends AppException {
   DuplicateBookException({
     required this.isbn,
     required this.existingTitle,
-  }) : super('A(z) „$existingTitle” (ISBN: $isbn) már szerepel a könyvtáradban.');
+  }) : super('A(z) "$existingTitle" (ISBN: $isbn) már szerepel a könyvtáradban.');
 }
 
 class StorageException extends AppException {

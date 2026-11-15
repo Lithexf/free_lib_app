@@ -1,12 +1,12 @@
-﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/book.dart';
 import 'database_provider.dart';
 
 enum BookSortOrder {
   dateAddedDesc('Legutóbb hozzáadott'),
   dateAddedAsc('Legrégebbi elöl'),
-  titleAsc('Cím A–Z'),
-  titleDesc('Cím Z–A'),
+  titleAsc('Cím A-Z'),
+  titleDesc('Cím Z-A'),
   ratingDesc('Legjobbra értékelt'),
   ratingAsc('Legrosszabbra értékelt');
 

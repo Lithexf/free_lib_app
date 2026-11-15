@@ -1019,8 +1019,8 @@ class BookApiService {
         .replaceAll('&apos;', "'")
         .replaceAll('&lt;', '<')
         .replaceAll('&gt;', '>')
-        .replaceAll('&ndash;', '–')
-        .replaceAll('&mdash;', '—')
+        .replaceAll('&ndash;', '-')
+        .replaceAll('&mdash;', '-')
         .replaceAll('&nbsp;', ' ');
 
     result = result.replaceAllMapped(RegExp(r'&#(\d+);'), (match) {

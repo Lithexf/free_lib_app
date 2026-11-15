@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -87,7 +87,7 @@ void main() {
   });
 
   group('IsbnValidator', () {
-    test('validates ISBN-10 and ISBN-13 checksums accurately', () {
+    test('ISBN-10 es ISBN-13 ellenorzes', () {
       expect(IsbnValidator.isValid('0-14-028329-3'), isTrue);
       expect(IsbnValidator.isValid('043942089X'), isTrue);
       expect(IsbnValidator.isValid('978-0-14-028329-7'), isTrue);
@@ -96,7 +96,7 @@ void main() {
       expect(IsbnValidator.isValid('014028329A'), isFalse);
     });
 
-    test('converts seamlessly between ISBN-10 and ISBN-13 and gets all formats', () {
+    test('ISBN-10 es ISBN-13 konverzio es formatumok', () {
       expect(IsbnValidator.isbn10to13('0140283293'), '9780140283297');
       expect(IsbnValidator.isbn10to13('invalid'), isNull);
       expect(IsbnValidator.isbn13to10('9780140283297'), '0140283293');
@@ -123,7 +123,7 @@ void main() {
       );
     });
 
-    test('detects Hungarian ISBNs and strips EAN-2/EAN-5 manga/book price add-ons', () {
+    test('Magyar ISBN es EAN kiegeszites kezeles', () {
       expect(IsbnValidator.isValid('9789634058397'), isTrue);
       expect(IsbnValidator.isHungarianIsbn('9789634058397'), isTrue);
       expect(IsbnValidator.isHungarianIsbn('978-615-5956-01-0'), isTrue);
@@ -139,8 +139,8 @@ void main() {
     });
   });
 
-  group('Book model, ReadingStatus & AppExceptions', () {
-    test('handles int/double rating casting, copyWith, equality and toMap', () {
+  group('Book modell es allapotok', () {
+    test('Book szerializacio, copyWith es egyenloseg', () {
       final nowMs = DateTime(2026, 5, 10).millisecondsSinceEpoch;
       final book = Book.fromMap({
         'id': 7,
@@ -194,7 +194,7 @@ void main() {
       expect(cleared.hashCode, equals(book.hashCode));
     });
 
-    test('ReadingStatus, BookSortOrder and AppExceptions format properly', () {
+    test('ReadingStatus, BookSortOrder es kivetelek', () {
       for (final status in ReadingStatus.values) {
         expect(ReadingStatus.fromString(status.name), status);
         expect(status.label, isNotEmpty);
@@ -217,7 +217,7 @@ void main() {
       expect(AppColors.primary, isNotNull);
     });
 
-    test('encrypts book fields at rest and preserves legacy scanned books', () {
+    test('Konyv mezok titkositasa es visszaallitasa', () {
       final crypto = LibraryEncryptionService.instance;
       crypto.initWithTestKey(Uint8List.fromList(List.generate(32, (i) => i + 1)));
 
@@ -248,8 +248,8 @@ void main() {
     });
   });
 
-  group('BookApiService error handling, parsing & translation', () {
-    test('parses Google Books volume metadata and community ratings', () async {
+  group('BookApiService tesztek', () {
+    test('Google Books metaadatok es ertekelesek', () async {
       final dio = Dio()
         ..httpClientAdapter = _FakeHttpAdapter((options) {
           final payload = jsonEncode({
@@ -296,7 +296,7 @@ void main() {
       expect(result.externalRatingSource, 'Google Books');
     });
 
-    test('parses Open Library batch details and search results with Japanese translation', () async {
+    test('Open Library adatok es japan cim forditas', () async {
       final dio = Dio()
         ..httpClientAdapter = _FakeHttpAdapter((options) {
           if (options.uri.host.contains('googleapis.com') &&
@@ -426,7 +426,7 @@ void main() {
     });
 
     test(
-        'finds Hungarian book 9789634058397 (A Gyűrűk Ura I-III.) rapidly via Bookline with full metadata',
+        'Bookline magyar ISBN kereses (9789634058397)',
         () async {
       final dio = Dio()
         ..httpClientAdapter = _FakeHttpAdapter((options) {
@@ -520,7 +520,7 @@ void main() {
     });
 
     test(
-        'enriches English Manga (9781974700523 Demon Slayer) by combining Open Library Edition and Search when Google Books returns 429',
+        'Angol manga kereses Open Library segitsegevel (9781974700523)',
         () async {
       int googleCalls = 0;
 
@@ -606,7 +606,7 @@ void main() {
     });
 
     test(
-        'falls back through Antikvarium and Open Library to Moly.hu last when primary APIs return empty',
+        'Tartalek forrasok sorrendje',
         () async {
       final calledHosts = <String>[];
 
@@ -690,7 +690,7 @@ void main() {
       expect(molyIndex, equals(calledHosts.length - 1));
     });
 
-    test('throws NetworkException when device is offline', () async {
+    test('Halozati hiba kezelese offline allapotban', () async {
       final dio = Dio()
         ..httpClientAdapter = _FakeHttpAdapter((options) {
           throw DioException.connectionError(
@@ -707,7 +707,7 @@ void main() {
     });
   });
 
-  group('Responsive UI, BookDetailScreen & Widgets', () {
+  group('Felhasznaloi felulet tesztek', () {
     Widget buildTestApp({required Size size, List<Book> books = const []}) {
       return ProviderScope(
         overrides: [
@@ -741,7 +741,7 @@ void main() {
     }
 
     testWidgets(
-        'uses BottomNavigationBar on compact mobile screens and navigates tabs',
+        'Mobil navigacio es menupontok',
         (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
@@ -768,7 +768,7 @@ void main() {
     });
 
     testWidgets(
-        'uses NavigationRail on wide screens, toggles list view, and opens BookDetailScreen',
+        'Szeles kepernyos nezet, listanezet es adatlap',
         (tester) async {
       tester.view.physicalSize = const Size(960, 720);
       tester.view.devicePixelRatio = 1.0;
@@ -825,7 +825,7 @@ void main() {
       expect(find.text('600 / 600 oldal (100%)'), findsOneWidget);
     });
 
-    testWidgets('renders ScanOverlay and StatusBadge widgets cleanly',
+    testWidgets('ScanOverlay es StatusBadge megjelenites',
         (tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -846,7 +846,7 @@ void main() {
     });
 
     testWidgets(
-        'BookDetailScreen clears lingering SnackBars and keeps Hozzáadás a könyvtárhoz button enabled immediately',
+        'Konyv adatlap mentes gomb es ertesitesek kezelese',
         (tester) async {
       final scannedBook = Book(
         id: 1,
@@ -912,7 +912,7 @@ void main() {
     });
 
     testWidgets(
-        '300-book stress test: encrypts, decrypts, renders, scrolls, and filters 300 books smoothly',
+        '300 konyv betoltese, titkositasa es gorgetese',
         (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;

@@ -18,7 +18,7 @@ android {
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
-        versionName = "${flutter.versionName} (by @Lithexf | Dart/Flutter)"
+        versionName = "${flutter.versionName} (by YWUSM7 | Dart/Flutter)"
     }
 
     buildTypes {

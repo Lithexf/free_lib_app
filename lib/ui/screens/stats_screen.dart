@@ -1,4 +1,4 @@
-﻿import 'package:fl_chart/fl_chart.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -189,7 +189,7 @@ class StatsScreen extends ConsumerWidget {
       ('Olvasott oldal', '${stats.totalPagesRead}'),
       (
         'Átlag értékelés',
-        stats.averageRating > 0 ? stats.averageRating.toStringAsFixed(1) : '—'
+        stats.averageRating > 0 ? stats.averageRating.toStringAsFixed(1) : '-'
       ),
       ('Befejezve', '${stats.countByStatus['completed'] ?? 0}'),
       ('Olvasom', '${stats.countByStatus['reading'] ?? 0}'),

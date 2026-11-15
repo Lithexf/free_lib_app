@@ -118,7 +118,7 @@ sequenceDiagram
     Notifier->>Api: lookupByIsbn(isbn)
 
     rect rgb(25, 45, 65)
-        Note over Api: 1. FÁZIS — Gyors Angol / Nemzetközi JSON API-k
+        Note over Api: 1. FÁZIS - Gyors Angol / Nemzetközi JSON API-k
         Api->>Api: 1.1 Google Books API (ISBN-13, majd ISBN-10)
         Api->>Api: 1.2 Open Library Direct Batch API (ISBN-13 + ISBN-10 együtt)
         Api->>Api: 1.3 Open Library Search API
@@ -126,7 +126,7 @@ sequenceDiagram
 
     alt Nem található az angol API-kban
         rect rgb(60, 40, 25)
-            Note over Api: 2. FÁZIS — Magyar tartalék (Moly.hu HTML kereső)
+            Note over Api: 2. FÁZIS - Magyar tartalék (Moly.hu HTML kereső)
             Api->>Api: 2.1 Moly.hu keresés és adatfeldolgozás
         end
     end

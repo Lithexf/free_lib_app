@@ -56,7 +56,7 @@ A projekt gyökerében ([.env.example](../.env.example)) és a [docs/.env.exampl
 
 ## 6.3 Infrastruktúra és Futási Követelmények
 
-### A) Céleszköz (Android okostelefon / tablet — Futásidejű követelmények)
+### A) Céleszköz (Android okostelefon / tablet - Futásidejű követelmények)
 - **Operációs rendszer**: Android 5.0 Lollipop (`API Level 21`) vagy újabb (ajánlott: Android 8.0+ `API 26+` az adaptív ikonokhoz, `targetSdk = 35`).
 - **Processzor (CPU)**: `arm64-v8a` (64-bit ARM), `armeabi-v7a` (32-bit ARM) vagy `x86_64`.
 - **Memória (RAM)**:

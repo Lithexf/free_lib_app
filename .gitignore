@@ -1,4 +1,4 @@
-﻿*.class
+*.class
 *.log
 *.pyc
 *.swp
@@ -9,12 +9,11 @@
 .history
 .svn/
 .swiftpm/
-migrate_working_dir/
-repomix-output.xml
 *.iml
 *.ipr
 *.iws
 .idea/
+.vscode/
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
@@ -28,4 +27,3 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
-.widget_preview/
